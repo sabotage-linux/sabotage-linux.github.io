@@ -1,0 +1,29 @@
+## A blog about bugs
+###
+
+Welcome to EWONTFIX, a blog dedicated to in-depth coverage of
+longstanding defects in software, especially Free and Open Source. The
+name EWONTFIX traditionally pokes fun at developers who refuse to fix
+or deny the existence of their bugs, but rather than just playing
+blame games, I hope to raise the standard of quality demanded from
+FOSS and help newer programmers learn from past mistakes in order not
+to repeat them.
+
+
+### About the author
+
+Rich Felker, who goes by dalias online, is the primary author of
+[musl](http://www.musl-libc.org), an implementation of the C/POSIX
+standard library with a strong focus on correctness and simplicity. He
+is also a security consultant associated with
+[Openwall](http://www.openwall.com), a participant in the Austin Group
+(which maintains the POSIX standard), and a contributor to various
+Free and Open Source software projects. His areas of particular
+interest include:
+
+- security and robustness
+- low-level systems programming
+- mobile devices
+- multilingual text support
+- audio and video processing
+- numerical computing

@@ -1,0 +1,15 @@
+<link rel="shortcut icon" href="/favicon.ico" type="image/png">
+<link rel="stylesheet" href="@DOCROOT@main.css" type="text/css">
+</head>
+
+<body>
+
+<div class="header">
+<h1>@BLOGNAME@</h1>
+<ul class="menu">
+<li><a href="@DOCROOT@">Home</a>
+<li><a href="@DOCROOT@about">About</a>
+<li><a href="@DOCROOT@feed.rss">RSS</a>
+</ul>
+</div>
+

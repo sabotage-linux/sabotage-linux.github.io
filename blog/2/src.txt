@@ -1,0 +1,326 @@
+## Thread cancellation and resource leaks
+### 21 Sep 2012 02:00 GMT
+
+In a multi-threaded C program where threads share address space and
+may be operating on shared objects as long as they use the proper
+synchronization tools, it's unsafe to asynchronously kill an
+individual thread without killing the whole process. Stale locks may
+be left behind and data being modified under those locks may be in an
+inconsistent state. This includes even internal heap management
+structures used by `malloc`.
+
+As such, the POSIX threads standard does not even offer a mechanism
+for forcible termination of individual threads. Instead, it offers
+*thread cancellation*, a mechanism by which early termination of a
+thread whose work is no longer needed can be negotiated in such a way
+that the thread to be cancelled cleans up any shared state and/or
+private resources it may be using before it terminates.
+
+The way cancellation works, from an application standpoint, is that
+when thread A no longer needs the work that thread B is performing,
+thread A calls `pthread_cancel` on thread B. Under normal
+circumstances, this does not immediately kill thread B - remember,
+asynchronously killing threads is fundamentally unsafe. Instead, it
+causes as *cancellation request* to be pending for thread B. The next
+time thread B calls a function which is specified by POSIX as a
+*cancellation point*, this request is acted upon, and the thread
+terminates (after possibly running cancellation cleanup handlers,
+which are analogous to exception handlers in languages with
+exceptions). Alternatively, if thread B happened to be blocked at a
+cancellation point already when thread A made the cancellation
+request, thread B would be immediately cancelled.
+
+This latter case is what makes cancellation a more powerful tool than
+simply setting an exit flag for the target thread to inspect:
+cancellation can interrupt functions that block waiting for an event
+such as input. This is important because, under many circumstances
+such as non-responsive network peers or fifos where the other end is
+not open, the event for which the thread is blocked waiting may never
+happen.
+
+On first consideration, one might consider cancellation unnecessary. A
+cancellation-like mechanism seems possible with interrupting signals,
+as in:
+
+	do {
+		pthread_mutex_lock(&ctx->exitflag_lock);
+		int flag = ctx->exitflag;
+		pthread_mutex_unlock(&ctx->exitflag_lock);
+		if (flag) pthread_exit(0);
+	} while ((n = read(fd, buf, sizeof buf)) == -1 && errno == EINTR);
+
+Unfortunately, this code has a race condition; if a signal is sent to
+the thread after `ctx->exitflag` is checked, but before `read` is
+called, `read` will then block indefinitely. This issue can be worked
+around by bombarding the thread with such signals until it exits
+(possibly with exponential backoff), as in:
+
+	unsigned ns = 255;
+	pthread_mutex_lock(&ctx->exitflag_lock);
+	ctx->exitflag = 1;
+	pthread_mutex_unlock(&ctx->exitflag_lock);
+	while (pthread_kill(ctx->thread_desc, sig) != ESRCH)
+		nanosleep({.tv_nsec=(ns+=ns+1)},0);
+
+However this solution is not only inelegant but also quite costly, and
+the cost grows severely under load when scheduling delays prevent the
+target thread from waking up right away.
+
+In an ideal world, thread cancellation would be the definitive
+solution to this problem, but low-quality implementations and possibly
+even a defect in the standard make it difficult to use cancellation
+robustly. Most of the bad implementations are just obviously bad, like
+the one in Darwin (MacOSX/iOS) where the developers literally just
+invented their own semantics based on the names of the
+cancellation-related functions without even looking at what they're
+specified to do. Those are topics for another post. What I'd like
+to examine now is a much more subtle problem in the NPTL
+implementation of POSIX threads used by the GNU C Library (glibc),
+which depending on how one interprets the standard, may be a
+conformance bug or may just be a flaw in the standard that allows for
+very-low-quality implementations that are impossible to use safely.
+
+POSIX specifies the general semantics of thread cancellation in
+Chapter 2 (XSH) 2.9.5 Thread Cancellation, as follows:
+
+> The side-effects of acting upon a cancellation request while
+> suspended during a call of a function are the same as the
+> side-effects that may be seen in a single-threaded program when a
+> call to a function is interrupted by a signal and the given function
+> returns [EINTR]. Any such side-effects occur before any cancellation
+> cleanup handlers are called.
+> 
+> Whenever a thread has cancelability enabled and a cancellation
+> request has been made with that thread as the target, and the thread
+> then calls any function that is a cancellation point (such as
+> pthread_testcancel() or read()), the cancellation request shall be
+> acted upon before the function returns. If a thread has
+> cancelability enabled and a cancellation request is made with the
+> thread as a target while the thread is suspended at a cancellation
+> point, the thread shall be awakened and the cancellation request
+> shall be acted upon. It is unspecified whether the cancellation
+> request is acted upon or whether the cancellation request remains
+> pending and the thread resumes normal execution if:
+> 
+> * The thread is suspended at a cancellation point and the event for
+> which it is waiting occurs
+> 
+> * A specified timeout expired
+> 
+> before the cancellation request is acted upon.
+
+The interesting part is side effects. POSIX specifies quite a few
+functions as cancellation points, and their most interesting side
+effects are:
+
+- Allocating file descriptors (`accept`, `open`, ...)
+- Obtaining a lock (`fcntl`, `lockf`, `sem_wait`, ...)
+- Deallocating file descriptors (`close`)
+- Ending the lifetime of a thread ID (`pthread_join`)
+- Consuming signals (`sigwaitinfo`, ...)
+
+File IO is of course also a major side effect, but possibly the
+least-interesting one in the sense that if you're cancelling a thread
+doing IO, you probably don't care about the final state of the open
+file except that it get closed and possibly deleted in the cleanup
+routines. The others are a lot more critical to safe and correct
+program operation.
+
+With regards to the interaction of cancellation and side effects, what
+you would like, as the application programmer, is that *either*:
+
+1. the side effects of the function occur, and control returns to the
+calling function, *or*
+2. no side effects of the function occur, and control never returns to
+the caller, instead passing into cancellation cleanup handlers and
+thread termination.
+
+The other possibility to be concerned with, however, is that the side
+effects of the function occur, but control never returns. Consider
+what this would mean for `open` or `accept`: a new file descriptor is
+allocated, but the descriptor is never returned to the application.
+Thus it becomes impossible to close it. The application is left with a
+**resource leak**.
+
+A much worse case is `close`. If the side effects of `close` take
+place without control returning, the application has no way of knowing
+the file descriptor was deallocated. If it assumes it's still valid
+and attempts to close it again in cleanup handlers or elsewhere in the
+program, it may in fact close as *different file* that was opened
+later by another thread and assigned the same file descriptor number.
+If it assumes the file descriptor was closed already and this
+assumption turns out to be wrong, it leaks a file descriptor.
+
+Are these just theoretical possibilities? Unfortunately, no. The way
+NPTL (used by glibc and uClibc) implements cancellable system calls is
+essentially (in pseudo-code):
+
+	ENABLE_ASYNC_CANCEL();
+	ret = DO_SYSCALL(...);
+	RESTORE_OLD_ASYNC_CANCEL();
+	return ret;
+
+In other words, it temporarily turns on *asynchronous cancellation*,
+whereby any cancellation request will take place immediately, for the
+duration of the system call. This unfortunately leaves a race
+condition window after the side effects have taken place (in
+kernelspace) but before asynchronous cancellation is turned off,
+during which a cancellation request can arrive and be acted upon.
+
+Here is a simple test case which demonstrates the issue:
+
+	#define _POSIX_C_SOURCE 200809L
+	#include <pthread.h>
+	#include <fcntl.h>
+	#include <sys/stat.h>
+	#include <time.h>
+	#include <stdio.h>
+	#include <unistd.h>
+	#include <stdlib.h>
+	
+	void *writeopener(void *arg)
+	{
+		int fd;
+		for (;;) {
+			fd = open(arg, O_WRONLY);
+			close(fd);
+		}
+	}
+	
+	void *leaker(void *arg)
+	{
+		int fd = open(arg, O_RDONLY);
+		pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, 0);
+		close(fd);
+		return 0;
+	}
+	
+	
+	#define ITER_COUNT 10000
+	
+	int main()
+	{
+		pthread_t td, bg;
+		struct stat st;
+		char tmp[] = "/tmp/cancel_race_XXXXXX";
+		int i, leaks=0;
+		
+		mkstemp(tmp);
+		unlink(tmp);
+		mkfifo(tmp, 0600);
+		srand(1);
+		pthread_create(&bg, 0, writeopener, tmp);
+		for (i=0; i<ITER_COUNT; i++) {
+			pthread_create(&td, 0, leaker, tmp);
+			nanosleep((&(struct timespec){ .tv_nsec=rand()%100000 }), 0);
+			pthread_cancel(td);
+			pthread_join(td, 0);
+		}
+		unlink(tmp);
+		for (i=4; i<1024; i++) {
+			if (!fstat(i, &st)) leaks++, printf("leaked fd %d\n", i);
+		}
+		return !!leaks;
+	}
+
+So, is this a conformance issue, or just a show-stoppingly-bad quality
+of implementation issue? Let's look again at the language in POSIX.
+The only text that explicitly gives an implementation freedom with
+regard to the behavior of cancellation is:
+
+> It is unspecified whether the cancellation request is acted upon or
+> whether the cancellation request remains pending and the thread
+> resumes normal execution if:
+> 
+> * The thread is suspended at a cancellation point and the event for
+> which it is waiting occurs
+> 
+> * A specified timeout expired
+> 
+> before the cancellation request is acted upon.
+
+The way I read this, an implementation is definitely allowed to act on
+a cancellation request that arrives after the event for which it's
+waiting occurs. Such events might be the availability of input on a
+pipe or socket, the arrival of a signal that would satisfy
+`sigwaitinfo`, the availability of free space in a pipe or network
+buffer that would make writing possible, etc. I don't however see
+anywhere POSIX allows action on a cancellation request that has
+arrived not only after the event for which the thread is waiting, but
+also after the side effects of the function (such as IO, consuming a
+signal, allocating or deallocating a file descriptor, etc.). The
+relevant text seems to be:
+
+> The side-effects of acting upon a cancellation request while
+> suspended during a call of a function are the same as the
+> side-effects that may be seen in a single-threaded program when a
+> call to a function is interrupted by a signal and the given function
+> returns [EINTR]. Any such side-effects occur before any cancellation
+> cleanup handlers are called.
+
+My reading of this is that, since a call to `open` that fails with
+`EINTR` does not allocate a file descriptor, a cancelled call to
+`open` must not do so either. However, the issue remains unresolved
+for `close` (which happens also to be the most dangerous issue) since
+POSIX gives implementations the freedom to choose whether to
+deallocate the file descriptor on `EINTR`:
+
+> If close() is interrupted by a signal that is to be caught, it shall
+> return -1 with errno set to [EINTR] and the state of fildes is
+> unspecified.
+
+Even worse, the `correct' behavior for `close` under `EINTR` (or any
+error) is to always deallocate the file descriptor. This is what Linux
+does anyway, and the reasons why it's the preferred behavior are way
+beyond the scope of this post. However, the `correct' behavior for
+`close` under cancellation is obviously to have no side effects, since
+an application has no way to distinguish between cases where
+a pending cancellation request was acted upon before attempting to
+close the file (thus having no side effects) and cases where the
+cancellation request arrived during close.
+
+As such, it seems the only safe way to use `close` with cancellation
+is by wrapping it in calls to `pthread_setcancelstate` that disable
+cancellation for the duration of the `close` call. This is probably
+harmless since `close` cannot in fact block except on special devices
+that hook the close event. Even POSIX makes it clear that the
+possibility of interruptable blocking in `close` should be avoided by
+implementations, stating in the Rationale (non-normative) section for
+the `close` function:
+
+> The use of interruptible device close routines should be discouraged
+> to avoid problems with the implicit closes of file descriptors by
+> exec and exit(). This volume of POSIX.1-2008 only intends to permit
+> such behavior by specifying the [EINTR] error condition.
+
+The ideal remedies I would like to see for this issue are:
+
+1. For glibc/NPTL to fix this issue, regardless of whether it's a bug
+or just a quality-of-implementation issue. Various non-invasive fixes
+are possible, but they all amount to having the cancellation-request
+handling code examine the program counter register for the point at
+which the thread was interrupted to see if the system call has
+completed yet at the point the request was received. In [musl
+libc](http://www.musl-libc.org), we do that by having labels in the
+assembly language and comparing the saved PC against them, but a
+DWARF2-annotation-based approach could also be devised which might be
+more appealing to glibc developers.
+
+2. For POSIX to clarify that cancellation must not be acted upon when
+any side effects of the function have already taken place. This will
+allow application programmers targetting conforming systems to
+actually use the cancellation interfaces for the purposes they were
+intended for.
+
+3. For POSIX to remove `close` from the list of cancellation points.
+I've never seen a situation where its being a cancellation point is
+beneficial, and the ambiguity of its behavior under `EINTR`, combined
+with the way cancellation side effects are specified in terms of
+`EINTR` behavior, just makes it unnecessarily ugly and difficult to
+use.
+
+So far, I've filed [bug #12683](http://sourceware.org/bugzilla/show_bug.cgi?id=12683) with
+glibc, but have not yet pursued anything with the Austin Group for
+clarifying the requirements of the standard.
+
+Status: OPEN

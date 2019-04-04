@@ -1,0 +1,55 @@
+## Introducing EWONTFIX
+### 22 Sep 2012 22:47 GMT
+
+Welcome to EWONTFIX, a blog about, well, bugs. Especially longstanding
+unfixed ones in C code for Linux or Unix-like systems. The idea for
+this blog grew out of conversations during the development of [musl
+libc](http://www.musl-libc.org). Aside from the fact that longstanding
+bugs in glibc were one of the original motivations for musl, it turns
+out that developing a libc leads to spending a lot of time building
+and testing applications. And in the process of testing, one ends up
+reading a lot of source. And a lot of source is appallingly bad.
+
+Most low-quality source code just isn't that interesting to write
+about. It's more just a matter of identifying the problems, submitting
+them to bug trackers, and following up until somebody fixes things.
+However there are also a good deal of cases where buggy code *is*
+interesting to discuss. These fall mostly under two major categories:
+
+1. The defect is endemic, in the sense that it's become a
+widely-copied idiom for other software written in the same language.
+
+2. The defect is in widely-used library code and has serious
+implications for any application using that code; however, most users
+of the library are at best vaguely aware that the defect even exists.
+
+In addition to providing analysis of bugs and design flaws, I aim to
+make the posts on EWONTFIX informative with regard to the broader
+context in which the flaw appears, covering topics such as thread
+cancellation, commit charge and overcommit, and async-signal-safety.
+
+This blog is presently utilizing [Disqus](http://www.disqus.com) for
+the comment system. Disqus is a third-party service that handles all
+the dynamic content off-site so I don't have to worry about server
+load, denial of service, and privilege escalation issues on the actual
+server EWONTFIX runs on. Anonymous comments are permitted. I'm still
+looking for a way to offer (at least read-only) access to the comments
+to visitors without JS/AJAX style web browsers. I'm sure some of this
+blog's target audience is unhappy with the current comment situation,
+but on the bright side, at least you guys can't post to flame about
+it.
+
+Attempts at humor aside, I would love a ready-made solution to pull
+static comments from Disqus in a form that's ready for pasting into
+the page's `<noscript>` block, or even better, a gateway to submit
+comments from a pure-HTML client. Readers, if you have any leads on
+this or want to contribute scripts for it, please post in the comments
+(after finding access to a browser that's capable of posting).
+
+Apart from using Disqus for comments, EWONTFIX is running entirely on
+static content built using GNU make and simple, portable shell
+scripts. All content source is written in
+[Markdown](http://en.wikipedia.org/wiki/Markdown). The site is styled
+with clean, simple CSS. At some point I may take a detour into
+meta-blogging to discus the design and implementation of the site
+itself - including, of course, bugs found in the process.
