@@ -1,4 +1,4 @@
-BLOGNAME=EWONTFIX
-BLOGDESC="A blog about bugs"
-DOCROOT=file:///home/rofl/sabotage-linux.github.io/blog/
-DOMAIN=ewontfix.com
+BLOGNAME="Devs on Acid"
+BLOGDESC="Random rants of a linux distribution developer"
+DOCROOT=/blog/
+DOMAIN=sabotage-linux.github.io
