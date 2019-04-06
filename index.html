@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Sabotage - the hardcore let's be oldschool UNIX experience</title>
+    <style>body{margin: 40px; padding-left: 360px; font-family:Futura, Verdana, Arial, Helvetica, sans-serif; color: #505050; background-color: #eae9e1;}
+           a{color: #252525; font-weight: bold;}
+           a:hover{text-decoration: underline;}
+           ul{margin: 0 0 0 1.6em; padding: 0;}</style>
+  </head>
+  <body>
+    <table style="position: absolute; left: 40px; width: 320px; top: 40px;">
+      <tr>
+        <td>
+          <a href="#"><img src="eightandahalf.png" alt="Sabotage."></a> 
+          <ul>
+            <li><a href="https://github.com/sabotage-linux/">GitHub</a> 
+            <li><a href="/blog/">Blog</a> 
+            <li><a href="http://pkg.sabotage.tech/">Package Information Database</a> 
+            <li><a href="http://tar.sabotage.tech/">Package Mirror</a> 
+            <li><a href="https://github.com/sabotage-linux/sabotage/blob/master/README.md">README</a>
+            <li><a href="https://github.com/sabotage-linux/sabotage/blob/master/COOKBOOK.md">THE COOKBOOK</a> 
+            <li><strike><a href="http://openwall.com/lists/sabotage/">Mailing List</strike></a> (unmaintained-use IRC)
+          </ul>
+        </td>
+      </tr>
+    </table>
+    <p> This is <a href="https://github.com/sabotage-linux/sabotage/">Sabotage</a>, an experimental <a href="https://kernel.org/">Linux</a>
+        distribution based on <a href="http://www.musl-libc.org/">musl libc</a> and <a href="http://www.busybox.net/">busybox</a>. </p>
+    <p> Requirements: </p>
+    <ul>
+      <li>i386, x86_64, MIPS, PowerPC32 or ARM(v4t+) processor. 
+      <li>Linux 2.6+, gcc 4.x, git, bzip2, patch, sed, tar, wc, wget and xz. 
+      <li>3~4GB disk space. 2GB is used to bootstrap a 135MB core system. 
+      <li>Lots of time and a fair bit of Linux knowledge. 
+    </ul>
+    <p> Features: </p>
+    <ul>
+      <li>Cross-compiles a complete self-hosting Linux system inside a chroot. 
+      <li>Core system is statically linked. 
+      <li>No /usr or /sbin. (<a href="http://gobolinux.org/index.php?page=doc/articles/clueless">related paper</a>) 
+      <li><a href="http://smarden.org/runit/">runit</a> based service supervision. 
+      <li><a href="https://github.com/sabotage-linux/butch/">butch</a>, a lightweight multithreaded package and build manager. 
+      <li>Packages are symlinked into / from /opt. (like <a href="https://www.gnu.org/software/stow">GNU Stow</a> and
+          <a href="http://gobolinux.org/">GoboLinux</a>) 
+    </ul>
+    <p> Bootstrap your own Sabotage system from source: </p>
+    <ul><li><a href="https://github.com/sabotage-linux/sabotage">https://github.com/sabotage-linux/sabotage</a></ul> 
+    <p> Ready-to-boot raw disk images: </p>
+    <ul>
+      <li>US: <a href="http://img.sabotage.tech/">http://img.sabotage.tech</a> 
+      <li>DE: <a href="http://ftp.barfooze.de/pub/sabotage/">http://ftp.barfooze.de/pub/sabotage/</a> 
+      <li>GR: <a href="http://foss.aueb.gr/mirrors/linux/sabotage/">http://foss.aueb.gr/mirrors/linux/sabotage/</a> 
+      <li>UK: <a href="http://dl.2f30.org/mirrors/sabotage/">http://dl.2f30.org/mirrors/sabotage/</a>
+      <li>FR: <a href="http://mirrors.2f30.org/sabotage/">http://mirrors.2f30.org/sabotage/</a>
+    </ul>
+    <p> READ THE <a href="https://github.com/sabotage-linux/sabotage/blob/master/README.md">README</a> and <a href="https://github.com/sabotage-linux/sabotage/blob/master/COOKBOOK.md">THE COOKBOOK</a> FIRST. </p>
+    <p> Email <a href="mailto:sabotage-subscribe@lists.openwall.com">sabotage-subscribe@lists.openwall.com</a> to subscribe to the
+        mailing list. </p>
+    <p> Sabotage is <a href="/license.html">public domain</a>. </p>
+    <p> <iframe width="560" height="315" src="https://www.youtube.com/embed/8dYLJQZSD9E" frameborder="0" allowfullscreen></iframe> </p>
+  </body>
+</html>
