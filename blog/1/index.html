@@ -1,4 +1,4 @@
-<html><head><title>Devs on Acid - Introducing EWONTFIX</title>
+<html><head><title>Devs on Acid - sqlite's anal gamation</title>
 <link rel="shortcut icon" href="/favicon.ico" type="image/png">
 <link rel="stylesheet" href="/blog/main.css" type="text/css">
 </head>
@@ -14,80 +14,223 @@
 </ul>
 </div>
 
-<div class="article"><h2>Introducing EWONTFIX</h2>
+<div class="article"><h2>sqlite's anal gamation</h2>
 
-<div class="pub">22 Sep 2012 22:47 GMT</div>
-<p>Welcome to EWONTFIX, a blog about, well, bugs. Especially longstanding
-unfixed ones in C code for Linux or Unix-like systems. The idea for
-this blog grew out of conversations during the development of <a href="http://www.musl-libc.org">musl
-libc</a>. Aside from the fact that longstanding
-bugs in glibc were one of the original motivations for musl, it turns
-out that developing a libc leads to spending a lot of time building
-and testing applications. And in the process of testing, one ends up
-reading a lot of source. And a lot of source is appallingly bad.</p>
+<div class="pub">25 Sep 2013</div>
+<p>sqlite's slogan: <strong>"Small. Fast. Reliable. Choose any three."</strong></p>
 
-<p>Most low-quality source code just isn't that interesting to write
-about. It's more just a matter of identifying the problems, submitting
-them to bug trackers, and following up until somebody fixes things.
-However there are also a good deal of cases where buggy code <em>is</em>
-interesting to discuss. These fall mostly under two major categories:</p>
+<p>i always wondered though, how such a small or "lite" package can take such a
+considerable amount of time to build.</p>
 
-<ol>
-<li><p>The defect is endemic, in the sense that it's become a
-widely-copied idiom for other software written in the same language.</p></li>
-<li><p>The defect is in widely-used library code and has serious
-implications for any application using that code; however, most users
-of the library are at best vaguely aware that the defect even exists.</p></li>
-</ol>
+<p>as the main author of the sabotage linux distribution, building software is my
+daily bread, so i own a pretty fast build box.
+it's an 8 core machine with 3.1 GHz, which builds a complete 3.11 linux kernel
+in less than 5 minutes, making use of all 8 cores via the nice parallel build
+feature of GNU make.</p>
 
-<p>In addition to providing analysis of bugs and design flaws, I aim to
-make the posts on EWONTFIX informative with regard to the broader
-context in which the flaw appears, covering topics such as thread
-cancellation, commit charge and overcommit, and async-signal-safety.</p>
+<pre><code>make -j8
+</code></pre>
 
-<p>This blog is presently utilizing <a href="http://www.disqus.com">Disqus</a> for
-the comment system. Disqus is a third-party service that handles all
-the dynamic content off-site so I don't have to worry about server
-load, denial of service, and privilege escalation issues on the actual
-server EWONTFIX runs on. Anonymous comments are permitted. I'm still
-looking for a way to offer (at least read-only) access to the comments
-to visitors without JS/AJAX style web browsers. I'm sure some of this
-blog's target audience is unhappy with the current comment situation,
-but on the bright side, at least you guys can't post to flame about
-it.</p>
+<p>when invoking make like this, it first determines the dependencies between the
+translation units,
+and then runs up to 8 build processes, one per cpu core, each one building a
+different .c file.</p>
 
-<p>Attempts at humor aside, I would love a ready-made solution to pull
-static comments from Disqus in a form that's ready for pasting into
-the page's <code>&lt;noscript&gt;</code> block, or even better, a gateway to submit
-comments from a pure-HTML client. Readers, if you have any leads on
-this or want to contribute scripts for it, please post in the comments
-(after finding access to a browser that's capable of posting).</p>
+<p>GCC 3.4.6, a C compiler with full C99 support builds in 43 sec:</p>
 
-<p>Apart from using Disqus for comments, EWONTFIX is running entirely on
-static content built using GNU make and simple, portable shell
-scripts. All content source is written in
-<a href="http://en.wikipedia.org/wiki/Markdown">Markdown</a>. The site is styled
-with clean, simple CSS. At some point I may take a detour into
-meta-blogging to discus the design and implementation of the site
-itself - including, of course, bugs found in the process.</p>
+<pre><code>$ time butch rebuild gcc3
+2013.09.25 12:13:50 building gcc3 (/src/build/build_gcc3.sh) -&gt; /src/logs/build_gcc3.log
+2013.09.25 12:14:33 done.
+real 0m 43.97s
+user 1m 36.66s
+sys 0m 13.74s
+</code></pre>
+
+<p>however, for sqlite, a supposedly small package, build times are comparatively huge:</p>
+
+<pre><code>$ time butch rebuild sqlite
+2013.09.25 12:18:27 building sqlite (/src/build/build_sqlite.sh) -&gt; /src/logs/build_sqlite.log
+2013.09.25 12:19:21 done.
+real 0m 54.03s
+user 0m 52.02s
+sys 0m 1.51s
+</code></pre>
+
+<p>nearly one minute, a fifth of the time used to build the linux kernel and 10
+seconds more than the gcc compiler.</p>
+
+<p>the full-blown postgresql database server package, takes <strong>less</strong> time to build
+as well:</p>
+
+<pre><code>$ time butch rebuild postgresql
+2013.09.25 12:19:21 building postgresql (/src/build/build_postgresql.sh) -&gt; /src/logs/build_postgresql.log
+2013.09.25 12:19:57 done.
+real 0m 36.63s
+user 1m 53.34s
+sys 0m 12.03s
+</code></pre>
+
+<p>how is it possible that postgresql, shipping 16 MB of compressed sources, as
+opposed to 1.8MB of sqlite, builds 33% faster ?</p>
+
+<p>if you look at the user times above, you start getting an idea.
+the user time (i.e. the entire cpu time burnt in userspace) for postgresql is
+1m53, while the total time that actually passed was only 36s.</p>
+
+<p>that means that the total work of 113 seconds was distributed among multiple
+cpu cores.
+dividing the user time through the real time gives us a concurrency factor of
+3.13.
+not perfect, given that make was invoked with -j8, but much better than sqlite,
+ which apparently only used a single core.</p>
+
+<p>let's take a look at sqlite's builddir</p>
+
+<pre><code>$ find . -name '*.c'
+./sqlite3.c
+./shell.c
+./tea/generic/tclsqlite3.c
+./tea/win/nmakehlp.c
+</code></pre>
+
+<p>ah, funny. there are only 4 C files total. that partially explains why 8 cores
+didn't help.
+the 2 files in tea/ are not even used, which leaves us with</p>
+
+<pre><code>$ ls -la *.c
+-rw-r--r-- 1 root root 91925 Jan 16 2012 shell.c
+-rw-r--r-- 1 root root 4711082 Jan 16 2012 sqlite3.c
+</code></pre>
+
+<p>so in the top level builddir, there are just 2 C files, one being 90 KB, and
+the other roughly 5MB.
+the 90KB version is built in less than 1 second, so after that the entire time
+spent is waiting for the single cpu core building the huge sqlite3.c.</p>
+
+<p>so why on earth would somebody stuff all source code into a single translation
+unit and thereby defeat
+makefile parallellism ?</p>
+
+<p>after all, the IT industry's mantra of the last 10 years was
+"parallellism, parallellism, and even more parallellism".</p>
+
+<p>here's the explanation:
+https://www.sqlite.org/amalgamation.html</p>
+
+<p>it's a "feature", which they call amalgamation.</p>
+
+<p>i call it anal gamation.</p>
+
+<blockquote>
+  <p>In addition to making SQLite easier to incorporate into other projects, the amalgamation also makes it run faster.
+Many compilers are able to do additional optimizations on code when it is contained with in a single translation unit such as it is in the amalgamation. </p>
+</blockquote>
+
+<p>so they have 2 reasons for wasting our time:</p>
+
+<ul>
+<li>reason 1: easier to incorporate</li>
+<li>reason 2: generated code is better as the compiler sees all code at once.</li>
+</ul>
+
+<p>let's look at <strong>reason 1</strong>:
+what they mean with incorporation is embedding the sqlite source code into another projects source tree.</p>
+
+<p>it is usually considered bad practice to embed third-party source code into your own source tree, for multiple reasons:</p>
+
+<ul>
+<li>every program that uses its own embedded copy of library X does not benefit from security updates when the default library install is updated.</li>
+<li>we have multiple different versions on the harddrive and loaded in RAM, wasting system resources</li>
+<li>having multiple incompatible versions can lead to a lot of breakage when it's used from another lib:
+for example application X uses lib Y and lib Z, and lib Z uses a "incorporated" version of lib Y.
+so we have a nice clash of 2 different lib Y versions. if lib Y has global state, it will get even worse.</li>
+<li>if the library in question is using some unportable constructs, wrong ifdefs etc., it needs to be patched to build.
+having to apply and maintain different sets of patches against multiple different versions "incorporated" into other packages, represents a big burden for the packager.</li>
+</ul>
+
+<p>instead, the installed version of libraries should be used.</p>
+
+<p>pkg-config can be used to query existence, as well as CFLAGS and LDFLAGS needed
+to build against the installed version of the library. if the required library
+is not installed or too old, just throw an error at configure time and tell
+the user to install it via apt-get or whatever.</p>
+
+<h3>conclusion: "incorporation" of source code is a bad idea to begin with.</h3>
+
+<p>now let's look at <strong>reason 2</strong> (better optimized code):
+it possibly sometimes made sense to help the compiler do its job in the 70ies, when everything started.
+however, it's 2013 now.
+compilers do a great job optimizing, and they get better at it every day.</p>
+
+<p>since GCC 4.5 was released in 2010, it ships with a feature called LTO
+it builds object files together with metadata that allows it to strip off unneeded functions and variables, inline functions that are only called once or twice, etc at link time - pretty much anything the sqlite devs want to achieve, and probably even more than that.</p>
+
+<h3>conclusion: pseudo-optimizing C code by stuffing everything into a big file is obsolete since LTO is widely available.</h3>
+
+<p>LTO does a better job anyway - not that it matters much, as sqlite spends most time waiting for I/O.
+every user who wants to make sqlite run faster, can simply add -flto to his CFLAGS.
+there's no need to dictate him which optimization he wants to apply.
+following this logic, they could as well just ship generated assembly code…</p>
+
+<p>but hey - we have the choice !
+<a href="https://www.sqlite.org/download.html">here</a>'s actually a tarball containing
+the ORIGINAL, UN-ANAL-GAMATED SOURCE CODE...</p>
+
+<p>... just that it's not a tarball.</p>
+
+<p>it's a fscking <strong>ZIP</strong> file.
+yes, you heard right.
+they distribute their source as ZIP files, treating UNIX users as second-class
+citizens.</p>
+
+<p>additionally they say that you should not use it:</p>
+
+<blockquote>
+  <p>sqlite-src-3080002.zip (5.12 MiB)
+A ZIP archive of the complete source tree for SQLite version 3.8.0.2 as extracted from the version control system.
+The Makefile and configure script in this tarball are <strong>not supported</strong>.
+<strong>Their use is not recommended</strong>.
+The SQLite developers do not use them.
+You <strong>should not use</strong> them either.
+If you want a configure script and an automated build, use either the amalgamation tarball or TEA tarball instead of this one.
+To build from this tarball, hand-edit one of the template Makefiles in the root directory of the tarball and build using your own customized Makefile.</p>
+</blockquote>
+
+<p>Note how the text talks about "this tarball" despite it being a ZIP file.</p>
+
+<p>Fun. there's only a single TARball on the entire site, so that's what you naturally pick for your build system.
+and that one contains the ANAL version.
+Note that my distro's build system does not even support zip files, as i don't have a single package in my repo that's not building from a tarball.
+should i change it and write special case code for one single package which doesn't play by the rules ?
+i really don't think so.</p>
+
+<p>funny fact: they even distribute <strong>LINUX BINARY downloads</strong> as .zip.
+i wonder in which world they live in.</p>
+
+<p>why do i care so much about build time ? it's just a minute after all.
+because the distribution gets built over and over again. and it's not just me building it, but a lot of other people as well - so the cumulated time spent waiting for sqlite to finish building its 5 MB file gets bigger and bigger each day.
+in the past i built sqlite more than 200 times, so my personal cumulated wasted time on it already exceeds the amount of time i needed to write this blog post.</p>
+
+<p>so what i hope to see is sqlite</p>
+
+<ul>
+<li>using tarballs for all their sources (and eventually distribute an additional .zip for windows lusers)</li>
+<li>using tarballs for their precompiled linux downloads</li>
+<li>either getting rid of the anal version entirely, now that they learned about LTO, or offer the anal version as an additional download and do not discourage users from using the sane version.</li>
+</ul>
+
+<h3>Update:</h3>
+
+<p>I just upgraded sqlite from 3071000 to 3080002</p>
+
+<pre><code>2013.09.27 02:23:24 building sqlite (/src/build/build_sqlite.sh) -&gt; /src/logs/build_sqlite.log
+2013.09.27 02:25:31 done.
+</code></pre>
+
+<p>it now takes more than 2 minutes.</p>
+
+<h5>this blog post originally appeared on my currently defunct <a href="https://devsonacid.wordpress.com/2013/09/25/sqlites-anal-gamation/">wordpress blog</a></h5>
 </div>
-<div id="disqus_thread">
-<a name="comments"></a>
-<noscript>
-</noscript>
-</div>
-
-<script type="text/javascript">
-var disqus_shortname = 'ewontfix';
-var disqus_identifier = '1';
-var disqus_title = '1';
-(function() { var dsq = document.createElement('script');
-dsq.type = 'text/javascript'; dsq.async = true;
-dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
-(document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
-})();
-</script>
-
 
 
 

@@ -1,4 +1,4 @@
-<html><head><title>Devs on Acid - A blog about bugs</title>
+<html><head><title>Devs on Acid - Random rants of a linux distro developer</title>
 <link rel="shortcut icon" href="/favicon.ico" type="image/png">
 <link rel="stylesheet" href="/blog/main.css" type="text/css">
 </head>
@@ -14,54 +14,44 @@
 </ul>
 </div>
 
-<div class="article"><h2>A blog about bugs</h2>
+<div class="article"><h2>Random rants of a linux distro developer</h2>
 
 <div class="pub"></div>
-<p>Welcome to EWONTFIX, a blog dedicated to in-depth coverage of
-longstanding defects in software, especially Free and Open Source. The
-name EWONTFIX traditionally pokes fun at developers who refuse to fix
-or deny the existence of their bugs, but rather than just playing
-blame games, I hope to raise the standard of quality demanded from
-FOSS and help newer programmers learn from past mistakes in order not
-to repeat them.</p>
+<p>Welcome to DevsOnACID, a blog dedicated to random outbursts about the perils
+of open source developments in the age of systemd, rust and cmake.
+There's a lot happening the open-source world (just as in the real world) that
+goes in a very destructive direction, mostly due to fanboi-ism and hipster
+culture.
+I hope to raise awareness of these issues from a standpoint of people that want
+to compile their entire system from source, and understand the components it
+consists of.</p>
 
-<h3>About the author</h3>
+<h3>About the author and his distribution</h3>
 
-<p>Rich Felker, who goes by dalias online, is the primary author of
-<a href="http://www.musl-libc.org">musl</a>, an implementation of the C/POSIX
-standard library with a strong focus on correctness and simplicity. He
-is also a security consultant associated with
-<a href="http://www.openwall.com">Openwall</a>, a participant in the Austin Group
-(which maintains the POSIX standard), and a contributor to various
-Free and Open Source software projects. His areas of particular
-interest include:</p>
+<p>John Spencer, who goes by <a href="https://github.com/rofl0r">rofl0r</a> online, is the
+primary author of <a href="https://sabotage-linux.github.io">sabotage linux</a>, a linux
+distribution based on musl libc and busybox, with a focus on hackability,
+efficiency and simplicity.</p>
 
-<ul>
-<li>security and robustness</li>
-<li>low-level systems programming</li>
-<li>mobile devices</li>
-<li>multilingual text support</li>
-<li>audio and video processing</li>
-<li>numerical computing</li>
-</ul>
+<p>Hackability means that the user compiles all components from source, so he is
+empowered to study their code and change/improve the parts that do not work
+to his liking. Also it should be made easy to be able to do that, and it should
+be able to compile for all sorts of hardware architectures.</p>
+
+<p>An efficient operating system can only be composed of efficient components,
+that means components that are both simple in nature and written in a language
+and using frameworks that compile to efficient machine code and use only small
+amounts of resources. Therefore, the majority of components in sabotage linux
+is implemented in the C language, and a very small amount in C++.
+No base system components are implemented in resource-hungry scripting
+languages.</p>
+
+<p>Bloated components like systemd or hard-to-impossible to bootstrap-from-source
+programming languages like rust or java are not really compatible with this
+design. Having half a dozen different GUI toolkits installed and loaded into
+RAM neither, therefore the default sabotage desktop tries to restrict itself
+to components using GTK+2 only.</p>
 </div>
-<div id="disqus_thread">
-<a name="comments"></a>
-<noscript>
-</noscript>
-</div>
-
-<script type="text/javascript">
-var disqus_shortname = 'ewontfix';
-var disqus_identifier = 'about';
-var disqus_title = 'about';
-(function() { var dsq = document.createElement('script');
-dsq.type = 'text/javascript'; dsq.async = true;
-dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
-(document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
-})();
-</script>
-
 
 
 

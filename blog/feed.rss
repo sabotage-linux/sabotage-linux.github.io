@@ -2,47 +2,48 @@
 <rss version="2.0">
 <channel>
 <title>Devs on Acid</title>
-<link>http://sabotage-linux.github.io</link>
+<link>https://sabotage-linux.github.io</link>
 <description>Random rants of a linux distribution developer</description>
 <language>en</language>
-<item><title>Thread cancellation and resource leaks</title>
-<guid>http://sabotage-linux.github.io/2</guid>
-<pubDate>21 Sep 2012 02:00 GMT</pubDate>
+<item><title>how compatible is libreSSL ?</title>
+<guid>https://sabotage-linux.github.io/blog/2</guid>
+<pubDate>12 Jul 2014</pubDate>
 <description><![CDATA[
-<p>In a multi-threaded C program where threads share address space and
-may be operating on shared objects as long as they use the proper
-synchronization tools, it's unsafe to asynchronously kill an
-individual thread without killing the whole process. Stale locks may
-be left behind and data being modified under those locks may be in an
-inconsistent state. This includes even internal heap management
-structures used by <code>malloc</code>.</p>
+<h4>portability</h4>
 
-<p>As such, the POSIX threads standard does not even offer a mechanism
-for forcible termination of individual threads. Instead, it offers
-<em>thread cancellation</em>, a mechanism by which early termination of a
-thread whose work is no longer needed can be negotiated in such a way
-that the thread to be cancelled cleans up any shared state and/or
-private resources it may be using before it terminates.
-...</p>
+<p>yesterday the "portable" version of libressl was released.
+http://ftp.openbsd.org/pub/OpenBSD/LibreSSL/libressl-2.0.0.tar.gz</p>
+
+<p>i set up a package in <a href="https://github.com/sabotage-linux/sabotage">sabotage linux</a>,
+and went on a voyage to investigate whether the full set of packages can be
+used with libressl instead of openssl.</p>
+
+<p>first of all, i had to fight some obstacles to get libressl compiling though...
+aa</p>
+
+<h5>obstacle 1 - -Werror</h5>
+
+<p>...</p>
 ]]></description></item>
-<item><title>Introducing EWONTFIX</title>
-<guid>http://sabotage-linux.github.io/1</guid>
-<pubDate>22 Sep 2012 22:47 GMT</pubDate>
+<item><title>sqlite's anal gamation</title>
+<guid>https://sabotage-linux.github.io/blog/1</guid>
+<pubDate>25 Sep 2013</pubDate>
 <description><![CDATA[
-<p>Welcome to EWONTFIX, a blog about, well, bugs. Especially longstanding
-unfixed ones in C code for Linux or Unix-like systems. The idea for
-this blog grew out of conversations during the development of <a href="http://www.musl-libc.org">musl
-libc</a>. Aside from the fact that longstanding
-bugs in glibc were one of the original motivations for musl, it turns
-out that developing a libc leads to spending a lot of time building
-and testing applications. And in the process of testing, one ends up
-reading a lot of source. And a lot of source is appallingly bad.</p>
+<p>sqlite's slogan: <strong>"Small. Fast. Reliable. Choose any three."</strong></p>
 
-<p>Most low-quality source code just isn't that interesting to write
-about. It's more just a matter of identifying the problems, submitting
-them to bug trackers, and following up until somebody fixes things.
-However there are also a good deal of cases where buggy code <em>is</em>
-interesting to discuss. These fall mostly under two major categories:
+<p>i always wondered though, how such a small or "lite" package can take such a
+considerable amount of time to build.</p>
+
+<p>as the main author of the sabotage linux distribution, building software is my
+daily bread, so i own a pretty fast build box.
+it's an 8 core machine with 3.1 GHz, which builds a complete 3.11 linux kernel
+in less than 5 minutes, making use of all 8 cores via the nice parallel build
+feature of GNU make.</p>
+
+<pre><code>make -j8
+</code></pre>
+
+<p>when invoking make like this, it first determines the dependencies between the
 ...</p>
 ]]></description></item>
 </channel></rss>

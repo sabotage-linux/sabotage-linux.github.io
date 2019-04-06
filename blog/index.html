@@ -15,409 +15,391 @@
 </ul>
 </div>
 
-<div class="article"><h2><a href="2">Thread cancellation and resource leaks</a></h2>
+<div class="article"><h2><a href="2">how compatible is libreSSL ?</a></h2>
 
-<div class="pub">21 Sep 2012 02:00 GMT</div>
-<p>In a multi-threaded C program where threads share address space and
-may be operating on shared objects as long as they use the proper
-synchronization tools, it's unsafe to asynchronously kill an
-individual thread without killing the whole process. Stale locks may
-be left behind and data being modified under those locks may be in an
-inconsistent state. This includes even internal heap management
-structures used by <code>malloc</code>.</p>
+<div class="pub">12 Jul 2014</div>
+<h4>portability</h4>
 
-<p>As such, the POSIX threads standard does not even offer a mechanism
-for forcible termination of individual threads. Instead, it offers
-<em>thread cancellation</em>, a mechanism by which early termination of a
-thread whose work is no longer needed can be negotiated in such a way
-that the thread to be cancelled cleans up any shared state and/or
-private resources it may be using before it terminates.</p>
+<p>yesterday the "portable" version of libressl was released.
+http://ftp.openbsd.org/pub/OpenBSD/LibreSSL/libressl-2.0.0.tar.gz</p>
 
-<p>The way cancellation works, from an application standpoint, is that
-when thread A no longer needs the work that thread B is performing,
-thread A calls <code>pthread_cancel</code> on thread B. Under normal
-circumstances, this does not immediately kill thread B - remember,
-asynchronously killing threads is fundamentally unsafe. Instead, it
-causes as <em>cancellation request</em> to be pending for thread B. The next
-time thread B calls a function which is specified by POSIX as a
-<em>cancellation point</em>, this request is acted upon, and the thread
-terminates (after possibly running cancellation cleanup handlers,
-which are analogous to exception handlers in languages with
-exceptions). Alternatively, if thread B happened to be blocked at a
-cancellation point already when thread A made the cancellation
-request, thread B would be immediately cancelled.</p>
+<p>i set up a package in <a href="https://github.com/sabotage-linux/sabotage">sabotage linux</a>,
+and went on a voyage to investigate whether the full set of packages can be
+used with libressl instead of openssl.</p>
 
-<p>This latter case is what makes cancellation a more powerful tool than
-simply setting an exit flag for the target thread to inspect:
-cancellation can interrupt functions that block waiting for an event
-such as input. This is important because, under many circumstances
-such as non-responsive network peers or fifos where the other end is
-not open, the event for which the thread is blocked waiting may never
-happen.</p>
+<p>first of all, i had to fight some obstacles to get libressl compiling though...</p>
 
-<p>On first consideration, one might consider cancellation unnecessary. A
-cancellation-like mechanism seems possible with interrupting signals,
-as in:</p>
+<h5>obstacle 1 - -Werror</h5>
 
-<pre><code>do {
-    pthread_mutex_lock(&amp;ctx-&gt;exitflag_lock);
-    int flag = ctx-&gt;exitflag;
-    pthread_mutex_unlock(&amp;ctx-&gt;exitflag_lock);
-    if (flag) pthread_exit(0);
-} while ((n = read(fd, buf, sizeof buf)) == -1 &amp;&amp; errno == EINTR);
+<pre><code>../include/openssl/bio.h:622:3: error: '__bounded__' attribute directive ignored [-Werror=attributes]
 </code></pre>
 
-<p>Unfortunately, this code has a race condition; if a signal is sent to
-the thread after <code>ctx-&gt;exitflag</code> is checked, but before <code>read</code> is
-called, <code>read</code> will then block indefinitely. This issue can be worked
-around by bombarding the thread with such signals until it exits
-(possibly with exponential backoff), as in:</p>
+<p>-Werror is hardcoded in the configure script, which is a very bad idea, and the opposite of portable.
+using -Werror is a guarantueed build break whenever the build is tried on a system the original developer had no access to.
+it's sufficient to use a different compiler version, different libc version, etc to make new warnings pop up.</p>
 
-<pre><code>unsigned ns = 255;
-pthread_mutex_lock(&amp;ctx-&gt;exitflag_lock);
-ctx-&gt;exitflag = 1;
-pthread_mutex_unlock(&amp;ctx-&gt;exitflag_lock);
-while (pthread_kill(ctx-&gt;thread_desc, sig) != ESRCH)
-    nanosleep({.tv_nsec=(ns+=ns+1)},0);
+<p>fixed with</p>
+
+<pre><code>sed -i 's/-Werror//' configure
 </code></pre>
 
-<p>However this solution is not only inelegant but also quite costly, and
-the cost grows severely under load when scheduling delays prevent the
-target thread from waking up right away.</p>
+<h5>obstacle 2 - unconditional inclusion of internal glibc header</h5>
 
-<p>In an ideal world, thread cancellation would be the definitive
-solution to this problem, but low-quality implementations and possibly
-even a defect in the standard make it difficult to use cancellation
-robustly. Most of the bad implementations are just obviously bad, like
-the one in Darwin (MacOSX/iOS) where the developers literally just
-invented their own semantics based on the names of the
-cancellation-related functions without even looking at what they're
-specified to do. Those are topics for another post. What I'd like
-to examine now is a much more subtle problem in the NPTL
-implementation of POSIX threads used by the GNU C Library (glibc),
-which depending on how one interprets the standard, may be a
-conformance bug or may just be a flaw in the standard that allows for
-very-low-quality implementations that are impossible to use safely.</p>
-
-<p>POSIX specifies the general semantics of thread cancellation in
-Chapter 2 (XSH) 2.9.5 Thread Cancellation, as follows:</p>
-
-<blockquote>
-  <p>The side-effects of acting upon a cancellation request while
-suspended during a call of a function are the same as the
-side-effects that may be seen in a single-threaded program when a
-call to a function is interrupted by a signal and the given function
-returns [EINTR]. Any such side-effects occur before any cancellation
-cleanup handlers are called.</p>
-
-<p>Whenever a thread has cancelability enabled and a cancellation
-request has been made with that thread as the target, and the thread
-then calls any function that is a cancellation point (such as
-pthread_testcancel() or read()), the cancellation request shall be
-acted upon before the function returns. If a thread has
-cancelability enabled and a cancellation request is made with the
-thread as a target while the thread is suspended at a cancellation
-point, the thread shall be awakened and the cancellation request
-shall be acted upon. It is unspecified whether the cancellation
-request is acted upon or whether the cancellation request remains
-pending and the thread resumes normal execution if:</p>
-
-<ul>
-<li><p>The thread is suspended at a cancellation point and the event for
-which it is waiting occurs</p></li>
-<li><p>A specified timeout expired</p></li>
-</ul>
-
-<p>before the cancellation request is acted upon.</p>
-</blockquote>
-
-<p>The interesting part is side effects. POSIX specifies quite a few
-functions as cancellation points, and their most interesting side
-effects are:</p>
-
-<ul>
-<li>Allocating file descriptors (<code>accept</code>, <code>open</code>, ...)</li>
-<li>Obtaining a lock (<code>fcntl</code>, <code>lockf</code>, <code>sem_wait</code>, ...)</li>
-<li>Deallocating file descriptors (<code>close</code>)</li>
-<li>Ending the lifetime of a thread ID (<code>pthread_join</code>)</li>
-<li>Consuming signals (<code>sigwaitinfo</code>, ...)</li>
-</ul>
-
-<p>File IO is of course also a major side effect, but possibly the
-least-interesting one in the sense that if you're cancelling a thread
-doing IO, you probably don't care about the final state of the open
-file except that it get closed and possibly deleted in the cleanup
-routines. The others are a lot more critical to safe and correct
-program operation.</p>
-
-<p>With regards to the interaction of cancellation and side effects, what
-you would like, as the application programmer, is that <em>either</em>:</p>
-
-<ol>
-<li>the side effects of the function occur, and control returns to the
-calling function, <em>or</em></li>
-<li>no side effects of the function occur, and control never returns to
-the caller, instead passing into cancellation cleanup handlers and
-thread termination.</li>
-</ol>
-
-<p>The other possibility to be concerned with, however, is that the side
-effects of the function occur, but control never returns. Consider
-what this would mean for <code>open</code> or <code>accept</code>: a new file descriptor is
-allocated, but the descriptor is never returned to the application.
-Thus it becomes impossible to close it. The application is left with a
-<strong>resource leak</strong>.</p>
-
-<p>A much worse case is <code>close</code>. If the side effects of <code>close</code> take
-place without control returning, the application has no way of knowing
-the file descriptor was deallocated. If it assumes it's still valid
-and attempts to close it again in cleanup handlers or elsewhere in the
-program, it may in fact close as <em>different file</em> that was opened
-later by another thread and assigned the same file descriptor number.
-If it assumes the file descriptor was closed already and this
-assumption turns out to be wrong, it leaks a file descriptor.</p>
-
-<p>Are these just theoretical possibilities? Unfortunately, no. The way
-NPTL (used by glibc and uClibc) implements cancellable system calls is
-essentially (in pseudo-code):</p>
-
-<pre><code>ENABLE_ASYNC_CANCEL();
-ret = DO_SYSCALL(...);
-RESTORE_OLD_ASYNC_CANCEL();
-return ret;
+<pre><code>compat/issetugid_linux.c:7:30: fatal error: gnu/libc-version.h: No such file or directory
 </code></pre>
 
-<p>In other words, it temporarily turns on <em>asynchronous cancellation</em>,
-whereby any cancellation request will take place immediately, for the
-duration of the system call. This unfortunately leaves a race
-condition window after the side effects have taken place (in
-kernelspace) but before asynchronous cancellation is turned off,
-during which a cancellation request can arrive and be acted upon.</p>
+<p>many people assume linux == glibc, but that is not the reality.
+sabotage linux uses <a href="http://www.musl-libc.org/">musl libc</a>, and there are at least 4 other libcs that could be used instead (uclibc, dietlibc, klibc, bionic).</p>
 
-<p>Here is a simple test case which demonstrates the issue:</p>
+<p>looking at <a href="https://gist.github.com/rofl0r/7f2901ca1249e7b55d62">issetugid<em>linux.c</a> uncovers a dubious hack:
+if glibc 2.19 is detected, getauxval(AT</em>SECURE) is not used, because there was once a bug (see comment in source code).</p>
 
-<pre><code>#define _POSIX_C_SOURCE 200809L
-#include &lt;pthread.h&gt;
-#include &lt;fcntl.h&gt;
-#include &lt;sys/stat.h&gt;
-#include &lt;time.h&gt;
-#include &lt;stdio.h&gt;
-#include &lt;unistd.h&gt;
-#include &lt;stdlib.h&gt;
+<p>however it's common practice in distros to backport bugfixes, without updating the version number.
+so this hack prevents proper usage of getauxval even if your libc version is long fixed.
+the mentioned bug is very likely already fixed in any distro using glibc 2.19.</p>
 
-void *writeopener(void *arg)
-{
-    int fd;
-    for (;;) {
-        fd = open(arg, O_WRONLY);
-        close(fd);
-    }
-}
+<p>to get the thing out of my way and compilation going on, the quick fix was to cover everything with <code>#ifdef __GLIBC__</code>.
+what the code really should do though is to just use the getauxval call unconditionally without the glibc version check.</p>
 
-void *leaker(void *arg)
-{
-    int fd = open(arg, O_RDONLY);
-    pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, 0);
-    close(fd);
-    return 0;
-}
+<h5>obstacle 3 - unnecessary unconditional inclusion of sys/sysctl.h</h5>
 
-
-#define ITER_COUNT 10000
-
-int main()
-{
-    pthread_t td, bg;
-    struct stat st;
-    char tmp[] = "/tmp/cancel_race_XXXXXX";
-    int i, leaks=0;
-
-    mkstemp(tmp);
-    unlink(tmp);
-    mkfifo(tmp, 0600);
-    srand(1);
-    pthread_create(&amp;bg, 0, writeopener, tmp);
-    for (i=0; i&lt;ITER_COUNT; i++) {
-        pthread_create(&amp;td, 0, leaker, tmp);
-        nanosleep((&amp;(struct timespec){ .tv_nsec=rand()%100000 }), 0);
-        pthread_cancel(td);
-        pthread_join(td, 0);
-    }
-    unlink(tmp);
-    for (i=4; i&lt;1024; i++) {
-        if (!fstat(i, &amp;st)) leaks++, printf("leaked fd %d\n", i);
-    }
-    return !!leaks;
-}
+<pre><code>compat/getentropy_linux.c:27:24: fatal error: sys/sysctl.h: No such file or directory
 </code></pre>
 
-<p>So, is this a conformance issue, or just a show-stoppingly-bad quality
-of implementation issue? Let's look again at the language in POSIX.
-The only text that explicitly gives an implementation freedom with
-regard to the behavior of cancellation is:</p>
+<p>musl does not have sys/sysctl.h, because:
+(citing musl's author Rich Felker)</p>
 
 <blockquote>
-  <p>It is unspecified whether the cancellation request is acted upon or
-whether the cancellation request remains pending and the thread
-resumes normal execution if:</p>
-
-<ul>
-<li><p>The thread is suspended at a cancellation point and the event for
-which it is waiting occurs</p></li>
-<li><p>A specified timeout expired</p></li>
-</ul>
-
-<p>before the cancellation request is acted upon.</p>
+  <p>sysctl does not work, and NEVER worked. using it is bogus.
+it was a bogus experimental syscall that was deprecated before it was ever used (basically, a broken binary version of /proc/sys, without any stability between kernel versions for what the binary constants meant).</p>
 </blockquote>
 
-<p>The way I read this, an implementation is definitely allowed to act on
-a cancellation request that arrives after the event for which it's
-waiting occurs. Such events might be the availability of input on a
-pipe or socket, the arrival of a signal that would satisfy
-<code>sigwaitinfo</code>, the availability of free space in a pipe or network
-buffer that would make writing possible, etc. I don't however see
-anywhere POSIX allows action on a cancellation request that has
-arrived not only after the event for which the thread is waiting, but
-also after the side effects of the function (such as IO, consuming a
-signal, allocating or deallocating a file descriptor, etc.). The
-relevant text seems to be:</p>
+<p>since the code in question does not use the sysctl function (declared in sys/sysctl.h) and does the syscall() directly,
+it was safe and sufficient to just remove the include statement.</p>
 
-<blockquote>
-  <p>The side-effects of acting upon a cancellation request while
-suspended during a call of a function are the same as the
-side-effects that may be seen in a single-threaded program when a
-call to a function is interrupted by a signal and the given function
-returns [EINTR]. Any such side-effects occur before any cancellation
-cleanup handlers are called.</p>
-</blockquote>
+<p>still it leaves a bad taste in my mouth that it was used at all...</p>
 
-<p>My reading of this is that, since a call to <code>open</code> that fails with
-<code>EINTR</code> does not allocate a file descriptor, a cancelled call to
-<code>open</code> must not do so either. However, the issue remains unresolved
-for <code>close</code> (which happens also to be the most dangerous issue) since
-POSIX gives implementations the freedom to choose whether to
-deallocate the file descriptor on <code>EINTR</code>:</p>
+<p>having fixed these 3 issues, libressl built successfully.
+<a href="https://github.com/sabotage-linux/sabotage/commit/4f2da253f669a0e2e69e6d5607e56c552b716eff">commit 4f2da253</a></p>
 
-<blockquote>
-  <p>If close() is interrupted by a signal that is to be caught, it shall
-return -1 with errno set to [EINTR] and the state of fildes is
-unspecified.</p>
-</blockquote>
+<p>on the plus side: using 8 cores, libressl builds in about 1 minute, while openssl requires 1:45.
+also openssl depends on perl, which takes an additional 2 minutes buildtime.
+so if nothing else depends on perl, it's about 3x faster.</p>
 
-<p>Even worse, the <code>correct' behavior for</code>close<code>under</code>EINTR<code>(or any
-error) is to always deallocate the file descriptor. This is what Linux
-does anyway, and the reasons why it's the preferred behavior are way
-beyond the scope of this post. However, the</code>correct' behavior for
-<code>close</code> under cancellation is obviously to have no side effects, since
-an application has no way to distinguish between cases where
-a pending cancellation request was acted upon before attempting to
-close the file (thus having no side effects) and cases where the
-cancellation request arrived during close.</p>
+<h4>compatibility</h4>
 
-<p>As such, it seems the only safe way to use <code>close</code> with cancellation
-is by wrapping it in calls to <code>pthread_setcancelstate</code> that disable
-cancellation for the duration of the <code>close</code> call. This is probably
-harmless since <code>close</code> cannot in fact block except on special devices
-that hook the close event. Even POSIX makes it clear that the
-possibility of interruptable blocking in <code>close</code> should be avoided by
-implementations, stating in the Rationale (non-normative) section for
-the <code>close</code> function:</p>
+<p>with libressl in place, a "world" metapackage (contains almost all packages) build was started.
+the results:</p>
 
-<blockquote>
-  <p>The use of interruptible device close routines should be discouraged
-to avoid problems with the implicit closes of file descriptors by
-exec and exit(). This volume of POSIX.1-2008 only intends to permit
-such behavior by specifying the [EINTR] error condition.</p>
-</blockquote>
+<p>wget failed to build due to lack of RAND_egd() function.
+fixed by using a patch from openbsd.
+<a href="https://github.com/sabotage-linux/sabotage/commit/234185c0dd408a9eeb6a14a31719760841f97be5">commit 234185c0</a></p>
 
-<p>The ideal remedies I would like to see for this issue are:</p>
+<p>stunnel failed to build due to lack of RAND_egd() function.
+fixed by using a custom patch conceptually equivalent to the wget one.
+<a href="https://github.com/sabotage-linux/sabotage/commit/9b47cbbf3ce903dee042c45c8197db066e8e0053">commit 9b47cbb</a></p>
 
-<ol>
-<li><p>For glibc/NPTL to fix this issue, regardless of whether it's a bug
-or just a quality-of-implementation issue. Various non-invasive fixes
-are possible, but they all amount to having the cancellation-request
-handling code examine the program counter register for the point at
-which the thread was interrupted to see if the system call has
-completed yet at the point the request was received. In <a href="http://www.musl-libc.org">musl
-libc</a>, we do that by having labels in the
-assembly language and comparing the saved PC against them, but a
-DWARF2-annotation-based approach could also be devised which might be
-more appealing to glibc developers.</p></li>
-<li><p>For POSIX to clarify that cancellation must not be acted upon when
-any side effects of the function have already taken place. This will
-allow application programmers targetting conforming systems to
-actually use the cancellation interfaces for the purposes they were
-intended for.</p></li>
-<li><p>For POSIX to remove <code>close</code> from the list of cancellation points.
-I've never seen a situation where its being a cancellation point is
-beneficial, and the ambiguity of its behavior under <code>EINTR</code>, combined
-with the way cancellation side effects are specified in terms of
-<code>EINTR</code> behavior, just makes it unnecessarily ugly and difficult to
-use.</p></li>
-</ol>
+<p>cryptsetup and others failed to detect openssl due to lack of pkgconfig files.
+i modified my package build script to create these .pc files (copies from openssl).
+<a href="https://github.com/sabotage-linux/sabotage/commit/156a36253b9e19f83103135113451209796c39cf">commit 156a362</a></p>
 
-<p>So far, I've filed <a href="http://sourceware.org/bugzilla/show_bug.cgi?id=12683">bug #12683</a> with
-glibc, but have not yet pursued anything with the Austin Group for
-clarifying the requirements of the standard.</p>
+<p>php, xorg-server and others failed to build subtly due to an ugly hack used in libressl's libcompat.a, linked into libcrypto.so:</p>
 
-<p>Status: OPEN</p>
+<pre><code>$ gcc test.c -lcrypto -fvisibility=hidden
+/bin/ld: a.out: hidden symbol `main' in /tmp/ccobhDjc.o is referenced by DSO
+/bin/ld: final link failed: Bad value
+
+$ readelf -a /lib/libcrypto.so | grep main
+000000345708 000a00000006 R_X86_64_GLOB_DAT 0000000000000000 main + 0
+10: 0000000000000000 0 NOTYPE GLOBAL DEFAULT UND main
+2146: 0000000000000000 0 NOTYPE GLOBAL DEFAULT UND main
+</code></pre>
+
+<p>in getentropy_linux.c:</p>
+
+<pre><code>extern int main(int, char *argv[]);
+#define HD(x) (SHA512_Update(&amp;ctx, (char *)&amp;(x), sizeof (x)))
+HD(main); /* an addr in program */
+</code></pre>
+
+<p>the address of main() is used to gather entropy… very smart… NOT.</p>
+
+<p>most of the methods used in this file to gather entropy are very dubious.
+the crypto experts from OpenBSD should know better and just use /dev/urandom and/or getauxval(AT_RANDOM)
+instead of all these hacks.</p>
+
+<p><a href="https://github.com/sabotage-linux/sabotage/commit/1a8113699311c95a42c0cce5d09746ca290852ac">commit 1a81136</a></p>
+
+<p>with that fixed, most programs expecting openssl seem to compile and work correctly.</p>
+
+<p>mysql's CMAKE build system fails to detect SSL libraries.</p>
+
+<pre><code>-- OPENSSL_INCLUDE_DIR = /usr/include
+-- OPENSSL_LIBRARY = /usr/lib/libssl.so
+-- CRYPTO_LIBRARY = /usr/lib/libcrypto.so
+-- OPENSSL_MAJOR_VERSION = 2
+-- Looking for SHA512_DIGEST_LENGTH
+-- Looking for SHA512_DIGEST_LENGTH - found
+CMake Error at cmake/ssl.cmake:231 (MESSAGE):
+Cannot find appropriate system libraries for SSL. Use WITH_SSL=bundled to
+enable SSL support
+</code></pre>
+
+<p>not patched yet.</p>
+
+<p>the last build error was in apache:</p>
+
+<pre><code>ssl_engine_init.c:445:28: error: `ENGINE_CTRL_CHIL_SET_FORKCHECK' undeclared
+</code></pre>
+
+<p>this is a macro which is available in openssl's engine.h, and was removed from libressl for unknown reasons.
+not patched yet.</p>
+
+<p>apart from these two, everything seems to be usable without big effort.
+so if the libressl developers rip out all their dubious entropy generation methods in favor of /dev/urandom on linux it might be well worth switching to it.</p>
+
+<p>the whole adventure is documented in the <a href="https://github.com/sabotage-linux/sabotage/commits/libressl_replaces_openssl">libressl<em>replaces</em>openssl branch</a>.</p>
+
+<h4>Update 07/13</h4>
+
+<p>OpenBSD released an updated version 2.0.1 earlier today.
+the new release fixes the following problems
+- reference to main() which breaks packages using -fvisibility=hidden
+- usage of -Werror
+- generation of pkg-config files
+- unconditional inclusion of sys/sysctl.h</p>
+
+<p>so the portability concerns have largely been addressed.
+the only portability issue not fixed is the glibc-specific stuff in issetugid_linux.c.
+instead, <a href="http://openwall.com/lists/musl/2014/07/12/28">a patch containing an issetugid implementation for inclusion in musl
+was sent to the musl maillist</a>.</p>
+
+<p>on the application compatibility side nothing seems to have changed.
+RAND_egd() is still missing, as well as the macros used by apache.</p>
+
+<p>the dubious fallbacks for getentropy (obsolete sysctl syscall, function addresses) are still present.</p>
+
+<p><a href="https://blog.hboeck.de/archives/851-LibreSSL-on-Gentoo.html">this blog</a> about similar testing done on gentoo (recommended read) has a link to a patch for the apache build.
+<a href="https://svn.hboeck.de/libressl-overlay/net-misc/openssh/files/openssh-arc4random.diff">there is also a patch for a segfault in openssh</a>.</p>
+
+<h5>this blog post originally appeared on my currently defunct <a href="https://devsonacid.wordpress.com/2014/07/12/how-compatible-is-libressl/">wordpress blog</a></h5>
 <p><a href="2/#comments">Post or read comments...</a></p></div>
-<div class="article"><h2><a href="1">Introducing EWONTFIX</a></h2>
+<div class="article"><h2><a href="1">sqlite's anal gamation</a></h2>
 
-<div class="pub">22 Sep 2012 22:47 GMT</div>
-<p>Welcome to EWONTFIX, a blog about, well, bugs. Especially longstanding
-unfixed ones in C code for Linux or Unix-like systems. The idea for
-this blog grew out of conversations during the development of <a href="http://www.musl-libc.org">musl
-libc</a>. Aside from the fact that longstanding
-bugs in glibc were one of the original motivations for musl, it turns
-out that developing a libc leads to spending a lot of time building
-and testing applications. And in the process of testing, one ends up
-reading a lot of source. And a lot of source is appallingly bad.</p>
+<div class="pub">25 Sep 2013</div>
+<p>sqlite's slogan: <strong>"Small. Fast. Reliable. Choose any three."</strong></p>
 
-<p>Most low-quality source code just isn't that interesting to write
-about. It's more just a matter of identifying the problems, submitting
-them to bug trackers, and following up until somebody fixes things.
-However there are also a good deal of cases where buggy code <em>is</em>
-interesting to discuss. These fall mostly under two major categories:</p>
+<p>i always wondered though, how such a small or "lite" package can take such a
+considerable amount of time to build.</p>
 
-<ol>
-<li><p>The defect is endemic, in the sense that it's become a
-widely-copied idiom for other software written in the same language.</p></li>
-<li><p>The defect is in widely-used library code and has serious
-implications for any application using that code; however, most users
-of the library are at best vaguely aware that the defect even exists.</p></li>
-</ol>
+<p>as the main author of the sabotage linux distribution, building software is my
+daily bread, so i own a pretty fast build box.
+it's an 8 core machine with 3.1 GHz, which builds a complete 3.11 linux kernel
+in less than 5 minutes, making use of all 8 cores via the nice parallel build
+feature of GNU make.</p>
 
-<p>In addition to providing analysis of bugs and design flaws, I aim to
-make the posts on EWONTFIX informative with regard to the broader
-context in which the flaw appears, covering topics such as thread
-cancellation, commit charge and overcommit, and async-signal-safety.</p>
+<pre><code>make -j8
+</code></pre>
 
-<p>This blog is presently utilizing <a href="http://www.disqus.com">Disqus</a> for
-the comment system. Disqus is a third-party service that handles all
-the dynamic content off-site so I don't have to worry about server
-load, denial of service, and privilege escalation issues on the actual
-server EWONTFIX runs on. Anonymous comments are permitted. I'm still
-looking for a way to offer (at least read-only) access to the comments
-to visitors without JS/AJAX style web browsers. I'm sure some of this
-blog's target audience is unhappy with the current comment situation,
-but on the bright side, at least you guys can't post to flame about
-it.</p>
+<p>when invoking make like this, it first determines the dependencies between the
+translation units,
+and then runs up to 8 build processes, one per cpu core, each one building a
+different .c file.</p>
 
-<p>Attempts at humor aside, I would love a ready-made solution to pull
-static comments from Disqus in a form that's ready for pasting into
-the page's <code>&lt;noscript&gt;</code> block, or even better, a gateway to submit
-comments from a pure-HTML client. Readers, if you have any leads on
-this or want to contribute scripts for it, please post in the comments
-(after finding access to a browser that's capable of posting).</p>
+<p>GCC 3.4.6, a C compiler with full C99 support builds in 43 sec:</p>
 
-<p>Apart from using Disqus for comments, EWONTFIX is running entirely on
-static content built using GNU make and simple, portable shell
-scripts. All content source is written in
-<a href="http://en.wikipedia.org/wiki/Markdown">Markdown</a>. The site is styled
-with clean, simple CSS. At some point I may take a detour into
-meta-blogging to discus the design and implementation of the site
-itself - including, of course, bugs found in the process.</p>
+<pre><code>$ time butch rebuild gcc3
+2013.09.25 12:13:50 building gcc3 (/src/build/build_gcc3.sh) -&gt; /src/logs/build_gcc3.log
+2013.09.25 12:14:33 done.
+real 0m 43.97s
+user 1m 36.66s
+sys 0m 13.74s
+</code></pre>
+
+<p>however, for sqlite, a supposedly small package, build times are comparatively huge:</p>
+
+<pre><code>$ time butch rebuild sqlite
+2013.09.25 12:18:27 building sqlite (/src/build/build_sqlite.sh) -&gt; /src/logs/build_sqlite.log
+2013.09.25 12:19:21 done.
+real 0m 54.03s
+user 0m 52.02s
+sys 0m 1.51s
+</code></pre>
+
+<p>nearly one minute, a fifth of the time used to build the linux kernel and 10
+seconds more than the gcc compiler.</p>
+
+<p>the full-blown postgresql database server package, takes <strong>less</strong> time to build
+as well:</p>
+
+<pre><code>$ time butch rebuild postgresql
+2013.09.25 12:19:21 building postgresql (/src/build/build_postgresql.sh) -&gt; /src/logs/build_postgresql.log
+2013.09.25 12:19:57 done.
+real 0m 36.63s
+user 1m 53.34s
+sys 0m 12.03s
+</code></pre>
+
+<p>how is it possible that postgresql, shipping 16 MB of compressed sources, as
+opposed to 1.8MB of sqlite, builds 33% faster ?</p>
+
+<p>if you look at the user times above, you start getting an idea.
+the user time (i.e. the entire cpu time burnt in userspace) for postgresql is
+1m53, while the total time that actually passed was only 36s.</p>
+
+<p>that means that the total work of 113 seconds was distributed among multiple
+cpu cores.
+dividing the user time through the real time gives us a concurrency factor of
+3.13.
+not perfect, given that make was invoked with -j8, but much better than sqlite,
+ which apparently only used a single core.</p>
+
+<p>let's take a look at sqlite's builddir</p>
+
+<pre><code>$ find . -name '*.c'
+./sqlite3.c
+./shell.c
+./tea/generic/tclsqlite3.c
+./tea/win/nmakehlp.c
+</code></pre>
+
+<p>ah, funny. there are only 4 C files total. that partially explains why 8 cores
+didn't help.
+the 2 files in tea/ are not even used, which leaves us with</p>
+
+<pre><code>$ ls -la *.c
+-rw-r--r-- 1 root root 91925 Jan 16 2012 shell.c
+-rw-r--r-- 1 root root 4711082 Jan 16 2012 sqlite3.c
+</code></pre>
+
+<p>so in the top level builddir, there are just 2 C files, one being 90 KB, and
+the other roughly 5MB.
+the 90KB version is built in less than 1 second, so after that the entire time
+spent is waiting for the single cpu core building the huge sqlite3.c.</p>
+
+<p>so why on earth would somebody stuff all source code into a single translation
+unit and thereby defeat
+makefile parallellism ?</p>
+
+<p>after all, the IT industry's mantra of the last 10 years was
+"parallellism, parallellism, and even more parallellism".</p>
+
+<p>here's the explanation:
+https://www.sqlite.org/amalgamation.html</p>
+
+<p>it's a "feature", which they call amalgamation.</p>
+
+<p>i call it anal gamation.</p>
+
+<blockquote>
+  <p>In addition to making SQLite easier to incorporate into other projects, the amalgamation also makes it run faster.
+Many compilers are able to do additional optimizations on code when it is contained with in a single translation unit such as it is in the amalgamation. </p>
+</blockquote>
+
+<p>so they have 2 reasons for wasting our time:</p>
+
+<ul>
+<li>reason 1: easier to incorporate</li>
+<li>reason 2: generated code is better as the compiler sees all code at once.</li>
+</ul>
+
+<p>let's look at <strong>reason 1</strong>:
+what they mean with incorporation is embedding the sqlite source code into another projects source tree.</p>
+
+<p>it is usually considered bad practice to embed third-party source code into your own source tree, for multiple reasons:</p>
+
+<ul>
+<li>every program that uses its own embedded copy of library X does not benefit from security updates when the default library install is updated.</li>
+<li>we have multiple different versions on the harddrive and loaded in RAM, wasting system resources</li>
+<li>having multiple incompatible versions can lead to a lot of breakage when it's used from another lib:
+for example application X uses lib Y and lib Z, and lib Z uses a "incorporated" version of lib Y.
+so we have a nice clash of 2 different lib Y versions. if lib Y has global state, it will get even worse.</li>
+<li>if the library in question is using some unportable constructs, wrong ifdefs etc., it needs to be patched to build.
+having to apply and maintain different sets of patches against multiple different versions "incorporated" into other packages, represents a big burden for the packager.</li>
+</ul>
+
+<p>instead, the installed version of libraries should be used.</p>
+
+<p>pkg-config can be used to query existence, as well as CFLAGS and LDFLAGS needed
+to build against the installed version of the library. if the required library
+is not installed or too old, just throw an error at configure time and tell
+the user to install it via apt-get or whatever.</p>
+
+<h3>conclusion: "incorporation" of source code is a bad idea to begin with.</h3>
+
+<p>now let's look at <strong>reason 2</strong> (better optimized code):
+it possibly sometimes made sense to help the compiler do its job in the 70ies, when everything started.
+however, it's 2013 now.
+compilers do a great job optimizing, and they get better at it every day.</p>
+
+<p>since GCC 4.5 was released in 2010, it ships with a feature called LTO
+it builds object files together with metadata that allows it to strip off unneeded functions and variables, inline functions that are only called once or twice, etc at link time - pretty much anything the sqlite devs want to achieve, and probably even more than that.</p>
+
+<h3>conclusion: pseudo-optimizing C code by stuffing everything into a big file is obsolete since LTO is widely available.</h3>
+
+<p>LTO does a better job anyway - not that it matters much, as sqlite spends most time waiting for I/O.
+every user who wants to make sqlite run faster, can simply add -flto to his CFLAGS.
+there's no need to dictate him which optimization he wants to apply.
+following this logic, they could as well just ship generated assembly code…</p>
+
+<p>but hey - we have the choice !
+<a href="https://www.sqlite.org/download.html">here</a>'s actually a tarball containing
+the ORIGINAL, UN-ANAL-GAMATED SOURCE CODE...</p>
+
+<p>... just that it's not a tarball.</p>
+
+<p>it's a fscking <strong>ZIP</strong> file.
+yes, you heard right.
+they distribute their source as ZIP files, treating UNIX users as second-class
+citizens.</p>
+
+<p>additionally they say that you should not use it:</p>
+
+<blockquote>
+  <p>sqlite-src-3080002.zip (5.12 MiB)
+A ZIP archive of the complete source tree for SQLite version 3.8.0.2 as extracted from the version control system.
+The Makefile and configure script in this tarball are <strong>not supported</strong>.
+<strong>Their use is not recommended</strong>.
+The SQLite developers do not use them.
+You <strong>should not use</strong> them either.
+If you want a configure script and an automated build, use either the amalgamation tarball or TEA tarball instead of this one.
+To build from this tarball, hand-edit one of the template Makefiles in the root directory of the tarball and build using your own customized Makefile.</p>
+</blockquote>
+
+<p>Note how the text talks about "this tarball" despite it being a ZIP file.</p>
+
+<p>Fun. there's only a single TARball on the entire site, so that's what you naturally pick for your build system.
+and that one contains the ANAL version.
+Note that my distro's build system does not even support zip files, as i don't have a single package in my repo that's not building from a tarball.
+should i change it and write special case code for one single package which doesn't play by the rules ?
+i really don't think so.</p>
+
+<p>funny fact: they even distribute <strong>LINUX BINARY downloads</strong> as .zip.
+i wonder in which world they live in.</p>
+
+<p>why do i care so much about build time ? it's just a minute after all.
+because the distribution gets built over and over again. and it's not just me building it, but a lot of other people as well - so the cumulated time spent waiting for sqlite to finish building its 5 MB file gets bigger and bigger each day.
+in the past i built sqlite more than 200 times, so my personal cumulated wasted time on it already exceeds the amount of time i needed to write this blog post.</p>
+
+<p>so what i hope to see is sqlite</p>
+
+<ul>
+<li>using tarballs for all their sources (and eventually distribute an additional .zip for windows lusers)</li>
+<li>using tarballs for their precompiled linux downloads</li>
+<li>either getting rid of the anal version entirely, now that they learned about LTO, or offer the anal version as an additional download and do not discourage users from using the sane version.</li>
+</ul>
+
+<h3>Update:</h3>
+
+<p>I just upgraded sqlite from 3071000 to 3080002</p>
+
+<pre><code>2013.09.27 02:23:24 building sqlite (/src/build/build_sqlite.sh) -&gt; /src/logs/build_sqlite.log
+2013.09.27 02:25:31 done.
+</code></pre>
+
+<p>it now takes more than 2 minutes.</p>
+
+<h5>this blog post originally appeared on my currently defunct <a href="https://devsonacid.wordpress.com/2013/09/25/sqlites-anal-gamation/">wordpress blog</a></h5>
 <p><a href="1/#comments">Post or read comments...</a></p></div>
 
 
