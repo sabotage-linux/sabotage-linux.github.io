@@ -3,7 +3,7 @@
 . ./config.sh
 
 cnt=0
-root=http://${DOMAIN}
+root=https://${DOMAIN}
 
 cat<<EOF
 <?xml version="1.0"?>
@@ -32,7 +32,7 @@ EOF
 
 cat <<EOF
 <item><title>$title</title>
-<guid>$root/$n</guid>
+<guid>${root}${DOCROOT}${n}</guid>
 <pubDate>$pub</pubDate>
 <description><![CDATA[
 $({ head -n 15 ; echo ... ; } | perl ./Markdown.pl)

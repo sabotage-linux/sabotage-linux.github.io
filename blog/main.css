@@ -9,7 +9,7 @@ code {
 }
 
 a, a:visited, a:hover {
-	color: #404080;
+	color: #303060;
 	text-decoration: none;
 }
 
@@ -25,19 +25,20 @@ a:hover {
 
 .header h1 {
 	color: #ffffff;
-	background-color: #5050a0;
+//	background-color: #ff9037;
+	background-color: #ff7700;
 	border-top-left-radius: 10pt;
 	border-top-right-radius: 10pt;
 	margin: 8pt 8pt 0pt 8pt;
 	padding: 4pt 12pt 4pt 12pt;
 	font-family: Nimbus Mono L, Courier New, Courier, Liberation Mono, DejaVu Sans Mono, mono, monospace;
 //	font-family: nimbus mono l, bitstream vera sans mono;
-	font-weight: normal;
+	font-weight: bold;
 }
 
 .header ul {
-	color: #000030;
-	background-color: #9090c0;
+	color: #303030;
+	background-color: #1b729b;
 	border-bottom-left-radius: 10pt;
 	border-bottom-right-radius: 10pt;
 	margin: 0pt 8pt 8pt 8pt;

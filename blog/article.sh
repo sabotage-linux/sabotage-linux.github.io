@@ -16,7 +16,7 @@ printf '<div class="pub">%s</div>\n' "$pub"
 perl ./Markdown.pl
 printf '</div>\n'
 
-false && :
+false && {
 cat <<EOF
 <div id="disqus_thread">
 <a name="comments"></a>
@@ -36,5 +36,6 @@ dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
 </script>
 
 EOF
+}
 
 cat foot.inc

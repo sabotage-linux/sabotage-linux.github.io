@@ -1,29 +1,37 @@
-## A blog about bugs
+## Random rants of a linux distro developer
 ###
 
-Welcome to EWONTFIX, a blog dedicated to in-depth coverage of
-longstanding defects in software, especially Free and Open Source. The
-name EWONTFIX traditionally pokes fun at developers who refuse to fix
-or deny the existence of their bugs, but rather than just playing
-blame games, I hope to raise the standard of quality demanded from
-FOSS and help newer programmers learn from past mistakes in order not
-to repeat them.
+Welcome to DevsOnACID, a blog dedicated to random outbursts about the perils
+of open source developments in the age of systemd, rust and cmake.
+There's a lot happening the open-source world (just as in the real world) that
+goes in a very destructive direction, mostly due to fanboi-ism and hipster
+culture.
+I hope to raise awareness of these issues from a standpoint of people that want
+to compile their entire system from source, and understand the components it
+consists of.
 
+### About the author and his distribution
 
-### About the author
+John Spencer, who goes by [rofl0r](https://github.com/rofl0r) online, is the
+primary author of [sabotage linux](https://sabotage-linux.github.io), a linux
+distribution based on musl libc and busybox, with a focus on hackability,
+efficiency and simplicity.
 
-Rich Felker, who goes by dalias online, is the primary author of
-[musl](http://www.musl-libc.org), an implementation of the C/POSIX
-standard library with a strong focus on correctness and simplicity. He
-is also a security consultant associated with
-[Openwall](http://www.openwall.com), a participant in the Austin Group
-(which maintains the POSIX standard), and a contributor to various
-Free and Open Source software projects. His areas of particular
-interest include:
+Hackability means that the user compiles all components from source, so he is
+empowered to study their code and change/improve the parts that do not work
+to his liking. Also it should be made easy to be able to do that, and it should
+be able to compile for all sorts of hardware architectures.
 
-- security and robustness
-- low-level systems programming
-- mobile devices
-- multilingual text support
-- audio and video processing
-- numerical computing
+An efficient operating system can only be composed of efficient components,
+that means components that are both simple in nature and written in a language
+and using frameworks that compile to efficient machine code and use only small
+amounts of resources. Therefore, the majority of components in sabotage linux
+is implemented in the C language, and a very small amount in C++.
+No base system components are implemented in resource-hungry scripting
+languages.
+
+Bloated components like systemd or hard-to-impossible to bootstrap-from-source
+programming languages like rust or java are not really compatible with this
+design. Having half a dozen different GUI toolkits installed and loaded into
+RAM neither, therefore the default sabotage desktop tries to restrict itself
+to components using GTK+2 only.
