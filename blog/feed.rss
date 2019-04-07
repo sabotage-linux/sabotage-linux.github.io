@@ -22,7 +22,7 @@ problem.
 Its developers have used previous releases in binary form along the path of
 evolution of the language and its compiler. This means in practice that one can
 only build a rust compiler by using a binary build supplied by a third party,
-which in turn basically means that one has to trust this third party, and that
+which in turn basically means that one has to trust this third party.
 ...</p>
 ]]></description></item>
 <item><title>how compatible is libreSSL ?</title>

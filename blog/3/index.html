@@ -30,8 +30,8 @@ problem.
 Its developers have used previous releases in binary form along the path of
 evolution of the language and its compiler. This means in practice that one can
 only build a rust compiler by using a binary build supplied by a third party,
-which in turn basically means that one has to trust this third party, and that
-the binary actually works on one's own system.</p>
+which in turn basically means that one has to trust this third party.
+Assuming that the binary actually works on one's own system.</p>
 
 <p>As sabotage linux is based on musl, the latter is not self-evident.</p>
 
@@ -39,12 +39,12 @@ the binary actually works on one's own system.</p>
 a C compiler. It was used to build the stage0 C compiler, which was then used
 to build the entire system. A sabotage user can have high confidence that his
 OS does not contain any backdoors in the userland stack.
-(Of course, it's impossible to read all the millions of lines of code of the
+Of course, it's impossible to read all the millions of lines of code of the
 linux kernel, nor is it possible to know the backdoors inside the CPU silicon or
 in the software stack that runs on the BIOS level or below.
 Still, it is a pretty good feeling to have at least a trustworthy userland.</p>
 
-<p>So Rust wants you to slap a binary containing megabytes of machine
+<p>So Rust developers want you to slap a binary containing megabytes of machine
 instructions on your PC and execute it.</p>
 
 <p>If we assume for one moment that we are OK with that, the next problem is that
