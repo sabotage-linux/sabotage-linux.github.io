@@ -17,8 +17,9 @@
 <div class="article"><h2>the rusty browser trap</h2>
 
 <div class="pub">06 Apr 2019 11:55 UTC</div>
-<p>If you're following sabotage linux development, you may have noticed that we're
-stuck on Firefox 52esr, which was released over a year ago.
+<p>If you're following <a href="https://github.com/sabotage-linux/sabotage/">sabotage linux</a>
+development, you may have noticed that we're stuck on Firefox 52esr, which was
+released over a year ago.
 This is because non-optional parts of Firefox were rewritten in the "Rust"
 programming language, and all newer versions now require to have a Rust compiler
 installed.</p>
@@ -33,7 +34,8 @@ only build a rust compiler by using a binary build supplied by a third party,
 which in turn basically means that one has to trust this third party.
 Assuming that the binary actually works on one's own system.</p>
 
-<p>As sabotage linux is based on musl, the latter is not self-evident.</p>
+<p>As sabotage linux is based on <a href="http://www.musl-libc.org/">musl</a>, the latter is
+not self-evident.</p>
 
 <p>Traditionally, the only binary thing required to bootstrap sabotage linux was
 a C compiler. It was used to build the stage0 C compiler, which was then used
