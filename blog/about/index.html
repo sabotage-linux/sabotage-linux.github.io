@@ -8,9 +8,9 @@
 <div class="header">
 <h1>Devs on Acid</h1>
 <ul class="menu">
-<li><a href="/blog/">Home</a>
-<li><a href="/blog/about">About</a>
-<li><a href="/blog/feed.rss">RSS</a>
+<li><a class=amenu href="/blog/">Home</a>
+<li><a class=amenu href="/blog/about">About</a>
+<li><a class=amenu href="/blog/feed.rss">RSS</a>
 </ul>
 </div>
 
@@ -19,8 +19,8 @@
 <div class="pub"></div>
 <p>Welcome to DevsOnACID, a blog dedicated to random outbursts about the perils
 of open source developments in the age of systemd, rust and cmake.
-There's a lot happening the open-source world (just as in the real world) that
-goes in a very destructive direction, mostly due to fanboi-ism and hipster
+There's a lot happening in the open-source world (just as in the real world)
+that goes in a very destructive direction, mostly due to fanboi-ism and hipster
 culture.
 I hope to raise awareness of these issues from a standpoint of people that want
 to compile their entire system from source, and understand the components it
@@ -35,16 +35,16 @@ efficiency and simplicity.</p>
 
 <p>Hackability means that the user compiles all components from source, so he is
 empowered to study their code and change/improve the parts that do not work
-to his liking. Also it should be made easy to be able to do that, and it should
-be able to compile for all sorts of hardware architectures.</p>
+to his liking. Doing so should be made easy, and it should be possible to
+crosscompile for all sorts of hardware architectures without emulating them.</p>
 
 <p>An efficient operating system can only be composed of efficient components,
 that means components that are both simple in nature and written in a language
 and using frameworks that compile to efficient machine code and use only small
 amounts of resources. Therefore, the majority of components in sabotage linux
-is implemented in the C language, and a very small amount in C++.
+is implemented in the C language, and a small rest in C++.
 No base system components are implemented in resource-hungry scripting
-languages.</p>
+languages such as perl or python.</p>
 
 <p>Bloated components like systemd or hard-to-impossible to bootstrap-from-source
 programming languages like rust or java are not really compatible with this

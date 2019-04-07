@@ -5,6 +5,26 @@
 <link>https://sabotage-linux.github.io</link>
 <description>Random rants of a linux distribution developer</description>
 <language>en</language>
+<item><title>the rusty browser trap</title>
+<guid>https://sabotage-linux.github.io/blog/3</guid>
+<pubDate>06 Apr 2019 11:55 UTC</pubDate>
+<description><![CDATA[
+<p>If you're following sabotage linux development, you may have noticed that we're
+stuck on Firefox 52esr, which was released over a year ago.
+This is because non-optional parts of Firefox were rewritten in the "Rust"
+programming language, and all newer version now require to have a Rust compiler
+installed.</p>
+
+<h4>And that is a real problem.</h4>
+
+<p>The Rust compiler is written in Rust itself, exposing the typical hen-and-egg
+problem.
+Its developers have used previous releases in binary form along the path of
+evolution of the language and its compiler. This means in practice that one can
+only build a rust compiler by using a binary build supplied by a third party,
+which in turn basically means that one has to trust this third party, and that
+...</p>
+]]></description></item>
 <item><title>how compatible is libreSSL ?</title>
 <guid>https://sabotage-linux.github.io/blog/2</guid>
 <pubDate>12 Jul 2014</pubDate>
@@ -18,8 +38,7 @@ http://ftp.openbsd.org/pub/OpenBSD/LibreSSL/libressl-2.0.0.tar.gz</p>
 and went on a voyage to investigate whether the full set of packages can be
 used with libressl instead of openssl.</p>
 
-<p>first of all, i had to fight some obstacles to get libressl compiling though...
-aa</p>
+<p>first of all, i had to fight some obstacles to get libressl compiling though...</p>
 
 <h5>obstacle 1 - -Werror</h5>
 

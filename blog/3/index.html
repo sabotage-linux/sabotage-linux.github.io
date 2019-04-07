@@ -1,0 +1,150 @@
+<html><head><title>Devs on Acid - the rusty browser trap</title>
+<link rel="shortcut icon" href="/favicon.ico" type="image/png">
+<link rel="stylesheet" href="/blog/main.css" type="text/css">
+</head>
+
+<body>
+
+<div class="header">
+<h1>Devs on Acid</h1>
+<ul class="menu">
+<li><a class=amenu href="/blog/">Home</a>
+<li><a class=amenu href="/blog/about">About</a>
+<li><a class=amenu href="/blog/feed.rss">RSS</a>
+</ul>
+</div>
+
+<div class="article"><h2>the rusty browser trap</h2>
+
+<div class="pub">06 Apr 2019 11:55 UTC</div>
+<p>If you're following sabotage linux development, you may have noticed that we're
+stuck on Firefox 52esr, which was released over a year ago.
+This is because non-optional parts of Firefox were rewritten in the "Rust"
+programming language, and all newer version now require to have a Rust compiler
+installed.</p>
+
+<h4>And that is a real problem.</h4>
+
+<p>The Rust compiler is written in Rust itself, exposing the typical hen-and-egg
+problem.
+Its developers have used previous releases in binary form along the path of
+evolution of the language and its compiler. This means in practice that one can
+only build a rust compiler by using a binary build supplied by a third party,
+which in turn basically means that one has to trust this third party, and that
+the binary actually works on one's own system.</p>
+
+<p>As sabotage linux is based on musl, the latter is not self-evident.</p>
+
+<p>Traditionally, the only binary thing required to bootstrap sabotage linux was
+a C compiler. It was used to build the stage0 C compiler, which was then used
+to build the entire system. A sabotage user can have high confidence that his
+OS does not contain any backdoors in the userland stack.
+(Of course, it's impossible to read all the millions of lines of code of the
+linux kernel, nor is it possible to know the backdoors inside the CPU silicon or
+in the software stack that runs on the BIOS level or below.
+Still, it is a pretty good feeling to have at least a trustworthy userland.</p>
+
+<p>So Rust wants you to slap a binary containing megabytes of machine
+instructions on your PC and execute it.</p>
+
+<p>If we assume for one moment that we are OK with that, the next problem is that
+we now need a different binary for every architecture we support.
+There's no mechanism in sabotage that allows to download a different thing
+per-architecture. All existing packages are recipes on how to build a piece of
+software from source, and that's done with the identical sources for all
+platforms.</p>
+
+<p>Additionally, <a href="https://forge.rust-lang.org/platform-support.html">Rust doesn't actually support all architectures</a> we support.
+It's a hipster thing, and not a professional product. And the hipsters decided
+to support only a very small number of popular architectures, such as AMD64 and
+x86. Others are either not supported at all, or without guarantee that it'll
+work.</p>
+
+<p>So even if we embrace Rust, there will be some architectures that can't have a
+working Firefox - ever?</p>
+
+<p>Now somebody who probably likes Rust, decided he wants to write a <a href="https://github.com/thepowersgang/mrustc">compiler</a> for
+it in C++, so people can use it to bootstrap from source. However, he targets
+a pretty old version of it, so in order to get a version compiled that's recent
+enough to build Firefox's sources, one needs to
+<a href="https://www.gnu.org/software/guix/blog/2018/bootstrapping-rust/">build a chain of 12+ Rust versions</a>.
+A member of our team actually embarked on this voyage, but the result was pretty
+disillusioning.</p>
+
+<ul>
+<li>The build of mrustc (the Rust compiler written in C++) itself takes over an
+hour on a very fast 8core workstation, and requires several patches.</li>
+<li>Every Rust version that needs to be built along the way bundles it own version
+of LLVM. LLVM is a huge library full of bugs, and never had proper musl support
+upstreamed. There are dozens of different build errors and hard-to-debug
+crashes for <em>every single different LLVM version</em> involved.
+Each bootstrapping step here takes a minimum of an hour too, as compiling
+Rust is even slower than compiling C++.</li>
+</ul>
+
+<p>After our team member spent about 3 nights on this endeavour, he gave up, even
+though we had support from somebody of "<a href="https://www.adelielinux.org/">adelie linux</a>", who went throught the
+entire process already. unfortunately, that person didn't take any
+step-by-step notes, there's only a
+<a href="https://portage.smaeul.xyz/distfiles/bootstrap">repository of mostly unsorted patches and other files</a>
+and a <a href="https://github.com/smaeul/rust/commits/bootstrap-1.19.0">patched version of rust 1.19.0</a>
+to start with.
+(<a href="https://adeliedev.blogspot.com/2017/11/official-stance-on-rust.html">Here</a>'s a blog post from adelie linux authors about rust, btw).</p>
+
+<p>So could it be done? Most likely yes, but it would require me to spend about 2
+estimated weeks of work, digging in the C++ turd of LLVM and Rust.
+Certainly not anything I would like to spend my time on.
+Unlike the people from adelie linux, my goal is not to create a single set of
+bootstrap binaries to be used in the future, but package recipes, so a user can
+build the entire set of rust versions from source.
+Building them all will probably require almost two full days of CPU time on a
+very fast box, so this is something not everybody can even afford to do.</p>
+
+<p>So from my point of view, it looks pretty much as if Firefox is dead.
+By choosing to make it exclusive to owners of a Rust compiler, mozilla chose
+to make it hard-to-impossible for hobbyists and source code enthusiasts like
+myself to compile their browser themselves.</p>
+
+<p>Not that it was easy in the past either, every version bump required about a
+half day of effort to fix new issues, introduced in this giant pile of C++
+copy-pasted from dozens of differents projects, and held together by a fragile
+build system mix of python, shell, perl, ancient autoconf etc etc...</p>
+
+<p>None of those upstream sources were ever tested on musl-based linux systems by
+their developers, and sabotage's unconventional filesystem layout adds yet
+another layer of possible breakage especially regarding the python virtualenv
+based build system.</p>
+
+<h4>So, Firefox is dead. What's the alternative?</h4>
+
+<p>Chromium? Possibly, but it's a clusterfuck itself.
+The <a href="http://www.linuxfromscratch.org/blfs/view/8.2/xsoft/chromium.html">source tarball is about 0.5 GB</a>
+<strong>compressed</strong>. and requires 2+GB hdd space just to unpack the sources, and
+probably another 5 GB for temporary object files during the build.
+And it will takes hours and hours to build, if you even have enough RAM.
+That's not really compatible with a hobbyist project, besides the numerous
+privacy issues with this browser.</p>
+
+<p>The only viable option left might be a webkit based browser or
+<a href="http://www.palemoon.org/">palemoon</a>, a fork of firefox without rust.</p>
+
+<p>I even considered for a while to run a QEMU VM with ReactOS with a binary
+windows-based precompiled browser, but funnily enough, around the same
+time mozilla started giving the boot to open-source enthusiasts by requiring
+Rust, they also removed support for Windows XP.
+And subsequently for ReactOS, since it is based on the Win2K3 API.</p>
+
+<p>So the future looks pretty grim.
+We need to invest a lot of work trying to get Palemoon to compile, and hopefully
+it will stay rust-free and usable for a couple more years.
+If not, we will be forced to run a VM with a bloated GLIBC-based linux distro
+and the full X11 stack, just to run a browser.</p>
+
+<p>Because unfortunately, without an up-to-date browser, a desktop system is almost
+worthless.</p>
+</div>
+
+
+
+</body>
+</html>
