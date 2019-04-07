@@ -7,9 +7,9 @@
 <div class="header">
 <h1>@BLOGNAME@</h1>
 <ul class="menu">
-<li><a href="@DOCROOT@">Home</a>
-<li><a href="@DOCROOT@about">About</a>
-<li><a href="@DOCROOT@feed.rss">RSS</a>
+<li><a class=amenu href="@DOCROOT@">Home</a>
+<li><a class=amenu href="@DOCROOT@about">About</a>
+<li><a class=amenu href="@DOCROOT@feed.rss">RSS</a>
 </ul>
 </div>
 

@@ -9,8 +9,12 @@ code {
 }
 
 a, a:visited, a:hover {
-	color: #303060;
+	color: #5050a0;
 	text-decoration: none;
+}
+
+a.amenu {
+	color: #a0a0a0;
 }
 
 a:hover {
