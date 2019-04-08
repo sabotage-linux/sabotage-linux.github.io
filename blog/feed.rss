@@ -5,6 +5,28 @@
 <link>https://sabotage-linux.github.io</link>
 <description>Random rants of a linux distribution developer</description>
 <language>en</language>
+<item><title>benchmarking python bytecode vs interpreter speed and bazaar vs git</title>
+<guid>https://sabotage-linux.github.io/blog/4</guid>
+<pubDate>07 Apr 2019 00:39 UTC</pubDate>
+<description><![CDATA[
+<p>A couple weeks ago,
+after an upgrade of libffi, we experienced odd build errors of python only on
+systems where python had previously been installed with an older libffi version:</p>
+
+<pre><code>error: [Errno 2] No such file or directory: '/lib/libffi-3.0.13/include/ffi.h'
+</code></pre>
+
+<p>There was no reference to <code>libffi-3.0.13</code> anywhere in the python source, and it
+turned out that it was contained in old python .pyc/.pyo bytecode files that
+survived a rebuild due to a packaging bug, and apparently were queried as
+authorative during the python build.</p>
+
+<pre><code>/lib/python2.7/_sysconfigdata.pyc:/lib/libffi-3.0.13/include
+/lib/python2.7/_sysconfigdata.pyo:/lib/libffi-3.0.13/include
+</code></pre>
+
+<p>...</p>
+]]></description></item>
 <item><title>the rusty browser trap</title>
 <guid>https://sabotage-linux.github.io/blog/3</guid>
 <pubDate>06 Apr 2019 11:55 UTC</pubDate>
