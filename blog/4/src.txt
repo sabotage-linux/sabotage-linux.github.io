@@ -64,7 +64,7 @@ hundreds of python files, the precompilation does indeed make a quite noticable
 difference. It is more than twice as fast.
 
 What's also becoming apparent is that bazaar is slow as hell.
-For the lulz, i replaced the bzr command in the above benchmark with git and
+For the lulz, I replaced the bzr command in the above benchmark with git and
 exported `PAGER=cat` so `git log` wouldn't interrupt the benchmark.
 As expected, git is orders of magnitude faster:
 
@@ -72,7 +72,7 @@ As expected, git is orders of magnitude faster:
 	user    0m 0.02s
 	sys     0m 0.05s
 
-Out of curiosity, i fiddled some more with python and added a [patch](https://gist.github.com/rofl0r/acd9da221c3c3f07213e87128ed37288) that
+Out of curiosity, I fiddled some more with python and added a [patch](https://gist.github.com/rofl0r/acd9da221c3c3f07213e87128ed37288) that
 builds python so its optimization switch `-O` is always active, and rebuilt both
 python and bazaar to produce only .pyo files instead of .pyc.
 Here are the results:
@@ -131,7 +131,7 @@ after make install finished.
 With that achieved, i compared the size of the previous /opt/python directory
 without .pyc files with the new one.
 
-it's 22.2 MB vs 31.1MB, so the .pyc files add roughly 9MB and make the package
+It's 22.2 MB vs 31.1MB, so the .pyc files add roughly 9MB and make the package
 almost 50% bigger.
 
 Now it happens that some python packages, build scripts and the like call python
