@@ -5,7 +5,8 @@ body {
 }
 
 code {
-	font-family: Nimbus Mono L, Courier New, Courier, Liberation Mono, DejaVu Sans Mono, mono, monospace;
+	font-family: Nimbus Mono L, Liberation Mono, DejaVu Sans Mono, mono, monospace;
+	background-color: #e0e0e0;
 }
 
 a, a:visited, a:hover {
