@@ -1,0 +1,634 @@
+<html><head><title>Devs on Acid - Mastering and designing C/C++ build systems</title>
+<link rel="shortcut icon" href="/favicon.ico" type="image/png">
+<link rel="stylesheet" href="/blog/main.css" type="text/css">
+</head>
+
+<body>
+
+<div class="header">
+<h1>Devs on Acid</h1>
+<ul class="menu">
+<li><a class=amenu href="/blog/">Home</a>
+<li><a class=amenu href="/blog/about">About</a>
+<li><a class=amenu href="/blog/feed.rss">RSS</a>
+</ul>
+</div>
+
+<div class="article"><h2>Mastering and designing C/C++ build systems</h2>
+
+<div class="pub">19 Apr 2019 10:36 UTC</div>
+<h2>A Primer for build system developers and users</h2>
+
+<p>As the maintainer of
+<a href="https://github.com/sabotage-linux/sabotage">sabotage linux</a>,
+a distro compiled from source, with >1000
+packages, and being involved in the development of
+<a href="https://musl-libc.org/">musl libc</a>, I've seen a wide
+variety of odd build systems, or regular build systems used in an odd way.
+Which resulted in lots of issues trying to get other people's packages building.</p>
+
+<p>The vast majority of build system coders and developers using these build systems
+for their packages do not understand in detail how their toolchains are supposed
+to be used,
+and especially cross-compilation is a topic the majority of people knows nothing
+about.
+The intent of this blog post is to explain the basic mechanisms, to change this
+situation.</p>
+
+<p>But first, let's establish the meaning of some terms.
+From here on, the term <code>user</code> will be used to mean the person trying to compile
+your software package from source. We're not concerned here about people using
+the compilation result via a binary package.</p>
+
+<p>Now we will first take a quick look at the basic concepts involved in
+compilation, followed by the typical 3 stages of a build process, which are:
+Configuration, Compilation, Installation.</p>
+
+<h2>Basic Compilation Concepts</h2>
+
+<p>So in order to get your program compiled on a variety of different hosts, you
+typically need to interface with the following components:</p>
+
+<h3>the compiler.</h3>
+
+<p>For the C programming language, the convention is that on the user's system
+there's a C compiler installed in the default search <code>PATH</code> with the name <code>cc</code>.
+It can be overridden with the environment variable <code>CC</code>.</p>
+
+<p>so if <code>CC</code> is set to <code>clang</code>, the build system should use <code>clang</code> instead of
+<code>cc</code>.</p>
+
+<p>A sanely designed build system does something along the lines of:</p>
+
+<pre><code>if is_not_set($CC): CC = cc
+</code></pre>
+
+<p>For C++, the default binary name is <code>c++</code> and the environment variable <code>CXX</code>.</p>
+
+<p>Note that the user may choose to set CC or CXX to something that includes
+multiple items, for example <code>CC=powerpc-gcc -I/tmp/powerpc/include</code>.</p>
+
+<p>Therefore, in a shell script, when you want to use the CC command to compile
+something, the $CC variable needs to be be used unquoted, i.e. <code>$CC</code> and not
+<code>"$CC"</code> since the latter would force the shell to look for a binary with the
+spaces inside the filename.</p>
+
+<p>(For the record, the compiler is the program that turns your sourcecode into
+ an object file, e.g. <code>cc foo.c -c -o foo.o</code>)</p>
+
+<h3>the linker.</h3>
+
+<p>Fortunately with C and C++, unless you do highly unusual things, you will
+never have to invoke the linker directly. instead you can simply use <code>CC</code>
+or <code>CXX</code> and they will know from the context that a linker is needed, and
+call the linker themselves.
+(For the record, the linker is what takes a couple
+.o files and turns them into an executable or a shared library, e.g.:
+<code>cc foo.o bar.o -o mybinary.elf</code>)</p>
+
+<h3>compiler and linker options.</h3>
+
+<p>There will be a couple options you will have to use so the compilation works
+in a certain way. For example, your code may require the flag <code>-std=c99</code> if
+you use C99 features.</p>
+
+<p>Additionally, the user will want or need to use certain flags.
+For this purpose, the environment variable <code>CFLAGS</code> is used.</p>
+
+<p>If the user didn't specify any <code>CFLAGS</code> himself, you may decide to set some
+sane default optimization flags (the default for GNU autoconf packages is
+<code>-O2 -g -Wall</code>). The CFLAGS used for the compilation should always put the
+user-set CFLAGS last in the command line, so the user has the ability to
+override some defaults he doesn't like.
+The following logic describes this:</p>
+
+<pre><code>REQUIRED_CFLAGS=-std=c99
+CFLAGS_FOR_COMPILE=$(REQUIRED_CFLAGS) $(CFLAGS)
+</code></pre>
+
+<p>For C++, these flags are called <code>CXXFLAGS</code>, and the logic is precisely the
+same.</p>
+
+<p>There's also <code>CPPFLAGS</code>, which is used for preprocessor directives such as
+<code>-DUSE_THIS_FEATURE -DHAVE_OPENGL</code> and include directories for header lookup.
+More about headers soon. Again, user-supplied <code>CPPFLAGS</code> need to be respected
+and used after the <code>CPPFLAGS</code> the build system requires.</p>
+
+<p>Last but not least we have <code>LDFLAGS</code>, these are flags used at link time.
+It contains things such as <code>-L</code> linker library search path directives,
+<code>-lxxx</code> directives that specify which libraries to link against, and other
+linker options such as <code>-s</code> (which means "strip the resulting binary").
+Here, again, the rule is
+to respect user-provided <code>LDFLAGS</code> and put them after your own in the linker
+command.</p>
+
+<p>From here on, whenever we talk about <code>cc</code> or <code>CC</code> or <code>CFLAGS</code>, the exact same
+applies to <code>c++</code>, <code>CXX</code> and <code>CXXFLAGS</code> for C++.</p>
+
+<h3>libraries and their headers</h3>
+
+<p>When writing code in C or C++, you necessarily need to use libraries installed
+on the end users machine. At least, you would need to use the C or C++
+standard library implementation. The former is known as <code>libc</code>, the latter as
+<code>libstdc++</code> or <code>libc++</code>. Optionally some other libraries, such as <code>libpng</code>
+may be needed.</p>
+
+<p>In compiled form, these libraries consist of header files, and the library
+itself, as either static (<code>.a archive</code>) or dynamic library
+(<code>.so, .dynlib, .dll</code>).
+These headers and libs are stored in a location on your user's machine, which
+is typically <code>/usr/include</code> for headers and <code>/usr/lib</code> for libraries, but this
+is none of your concern. It's the job of the user to configure his compiler
+in such a way that when you e.g. <code>#include &lt;stdio.h&gt;</code> it works (usually the user
+uses his distro-provided toolchain which is properly set up).</p>
+
+<h3>cross-compilation</h3>
+
+<p>Cross-compilation means that you compile for a different platform than
+the one you're using, for example if you want to compile <code>ARM</code> binaries for your
+raspberry pi from your x86_64 desktop.</p>
+
+<p>It's not really much different than regular compilation, you pass your compiler
+name as CC, e.g. <code>CC=armv7l-linux-musl-gcc</code> and set your C and CPP flags such
+that they point into the lib/ and include/ dirs with your other ARM stuff in it.
+For example, if you prepare a rootfs for your raspberry pi in <code>/tmp/piroot</code>,
+you'd probably set up your compiler-related environment vars as following:</p>
+
+<pre><code>CC=armv7l-linux-musl-gcc
+CPPFLAGS=-isystem /tmp/piroot/include
+LDFLAGS=-L/tmp/piroot/lib
+</code></pre>
+
+<p>In compiler jargon, the <code>armv7l-linux-musl</code> prefix to your toolchain name is the
+so-called <code>triplet</code>. All components of your toolchain are prefixed with it, for
+example the <code>ar</code> archiver is called <code>armv7l-linux-musl-ar</code>, the same applies for
+<code>as</code>, <code>ld</code>, <code>ranlib</code>, <code>strip</code>, <code>objdump</code>, etc.</p>
+
+<p>In Autoconf-based build systems, you pass the triplet as
+<code>--host=armv7l-linux-musl</code> to <code>./configure</code>, whereas Makefile-only based systems
+usually use a <code>CROSS_COMPILE</code> environment variable, which is set to triplet plus
+a trailing dash, e.g. <code>CROSS_COMPILE=armv7l-linux-musl-</code>.
+In your own build system, you should follow the GNU autoconf convention though.</p>
+
+<p>What makes cross-compilation a bit tricky is</p>
+
+<ul>
+<li><p>you can't execute binaries that you created with the crosscompiler toolchain
+on your build machine.</p>
+
+<p>Some packages require to compile tools that are then executed, for example
+to generate some headers and similar things.
+These tools need to be compiled with a different compiler, targeting your
+host's OS, arch, etc, which in autoconf jargon is confusingly called the
+"build" compiler, whereas Makefile-only based build systems call it <code>HOSTCC</code>.
+Note that when such programs, to be executed on the host, require other
+additional object files that are needed for the target build too, these
+object files need to be compiled twice, once for the host and once for the
+target. In such a case it is advisable to give the object files different
+extensions, maybe <code>.ho</code> for object files meant for the host, and <code>.o</code> for
+those intended for the target.</p>
+
+<p>This also means your configuration process can't use checks that require to
+build and then run a binary.</p></li>
+<li><p>There's a variety of reasons host include/ and lib/ directories can leak
+into the build process, causing havoc. In the worst case, you only have an
+include directory leak which has wrong sizes for types in them, which can
+result in a successfully linked binary that will crash or corrupt memory.
+If host library
+directories leak into the build, you will get link errors when the linker
+tries to link ARM and x86_64 binaries together.
+One of the worst offenders in this regard is <code>libtool</code>, which should be
+avoided at all costs.</p></li>
+</ul>
+
+<h2>The Build Process</h2>
+
+<p>If you design a build system from scratch, keep in mind that your users probably
+don't want to spend a lot of time learning about your system.
+They simply want to get the process done as painlessly and quickly as possible
+(which implies that the build system itself should have as little external
+dependencies as possible).</p>
+
+<p>Please do respect existing conventions, and try to model your build system's
+user interface after the well-established <a href="https://www.gnu.org/prep/standards/html_node/Managing-Releases.html#Managing-Releases">GNU autoconf standards</a>,
+because it's
+what's been around for 20+ years and what the majority of packages use, so it's
+very likely that the user of your package is familiar with its usage.
+Also, unlike more hip build tools of the day, their user interface is the
+result of a long evolutionary process. Autoconf does have a lot of ugly sides to
+it, but from a user perspective it is pretty decent and has a streamlined way
+to configure the build.</p>
+
+<h3>Step1: Configuration</h3>
+
+<p>Before we can start building, we need to figure out a few things.
+If the package has optional functionality, the user needs to be able to specify
+whether he wants it or not. Some functionality might require additional
+libraries, etc. This stage in the build process is traditionally done via a
+script called <code>configure</code>.</p>
+
+<h4>Enabling optional functionality</h4>
+
+<p>Your package may have some non-essential code or feature, that might pull in a
+big external library, or may be undesirable for some people for other reasons.</p>
+
+<p>Traditionally, this is achieved by passing a flag such as <code>--disable-libxy</code> or
+<code>--without-feature</code>, or conversely <code>--with-feature</code> or <code>--enable-libxy</code>.</p>
+
+<p>If such a flag is passed, the script can then write for example a configuration
+header that has some preprocessor directive to disable the code at compile time.
+Or such a directive is added to the <code>CPPFLAGS</code> used during the build.</p>
+
+<p>These flags should be documented when the configure script is being run with
+the <code>--help</code> switch.</p>
+
+<h4>System- or Version-specific behaviour</h4>
+
+<p>Sometimes one needs to use functionality that differs from system to
+system, so we need to figure out in which way the user's system provides it.</p>
+
+<p>The wrong way to go about this is to hardcode assumptions about specific
+platforms (OS/compiler/C standard library/library combinations) with ifdefs
+like this:</p>
+
+<pre><code>#if OPENSSL_VERSION_NUMBER &gt;= 0x10100000
+/* OpenSSL &gt;= 1.1 added DSA_get0_pqg() */
+    DSA_get0_pqg(dsa, &amp;p, &amp;q, &amp;g);
+#else
+    ...
+#endif
+</code></pre>
+
+<p>This is wrong for several reasons:</p>
+
+<ul>
+<li><p>Linux distros sometimes backport functionality from newer library versions
+to the older library version they ship. Conversely a newer library version
+that supposedly should have the functionality, could have been selectively
+downgraded with a patch fixing a specific bug, which might require to undo
+a new feature.</p></li>
+<li><p>For some libraries, as in this case OpenSSL, API-compatible replacements
+exist (here libressl or Apple's fork boringssl).</p></li>
+</ul>
+
+<p>The proper way to figure out whether <code>DSA_get0_pqg()</code> exists, is... to actually
+check whether it exists, by compiling a small testcase using it (more below),
+and pass a preprocessor flag such as <code>HAVE_DSA_GET0_PQG</code> to the code in
+question.</p>
+
+<p>Even worse than the above hardcoded version number check is when people assume
+that a certain C library implementation, for example <code>musl</code>, have a certain bug
+or behaviour or lack a certain function, because at the time they tested it
+that was the case. If a <code>__MUSL__</code> macro <a href="https://wiki.musl-libc.org/faq.html#Q:-Why-is-there-no-%3Ccode%3E__MUSL__%3C/code%3E-macro?">would exist</a>
+, they would just hardcode
+their assumption into the code, even though the very next version of musl might
+have fixed the bug or added the function in question, which would then result
+in compile errors or even worse, bogus behaviour at runtime.</p>
+
+<h4>Checking for headers</h4>
+
+<p>You should NEVER hardcode any absolute paths for headers or libraries into
+your build system, nor should you start searching in the user's filesystem for
+them. This would make it impossible to use your package on systems with a
+non-standard directory layout, or for people that need to crosscompile it
+(more on cross-compilation just a little further down).</p>
+
+<p>The majority of third-party libraries install their headers either into a
+separate sub-directory in the compiler's default include path
+(for example <code>/usr/include/SDL/*.h</code>), or if there's only one or two headers
+directly into the include dir (for example <code>/usr/include/png.h</code>).
+Now when you want to test for whether the user's system has the libpng headers
+installed, you simply create a temporary .c file with the following contents:</p>
+
+<pre><code>#include &lt;png.h&gt;
+typedef int foo;
+</code></pre>
+
+<p>and then use <code>$CC $CPPFLAGS $CFLAGS -c temp.c</code> and check whether the command
+succeeded. If it did, then the <code>png.h</code> is available through either the
+compiler's default include directory search paths, or via a user-supplied
+<code>-I incdir</code> statement which he can provide if his libpng is installed in a
+non-standard location such as <code>$HOME/include</code>.</p>
+
+<p>Note that this approach is cross-compile safe, because we didn't need to execute
+any binary.</p>
+
+<p>If you want to use headers of a library such as <code>SDL</code> that installs a number
+of headers into a subdir, you should reference them in your code via
+<code>#include &lt;SDL/SDL.h&gt;</code> and not <code>#include &lt;SDL.h&gt;</code>, because the latter will
+require the addition of <code>-I path</code> include search path directives.</p>
+
+<h4>Checking for functions in libraries</h4>
+
+<p>After you've established that the user has libpng's headers installed, you might
+want to check whether it links correctly and whether it provides a certain
+function you're using (though testing for this only makes sense if the function
+is a recent addition).</p>
+
+<p>Again, you check this by writing a temporary .c file, that looks roughly like:</p>
+
+<pre><code>#include &lt;png.h&gt;
+int main() {png_set_compression_buffer_size(0, 0);}
+</code></pre>
+
+<p>the command to test it is: <code>$CC $CPPFLAGS $CFLAGS temp.c -lpng $LDFLAGS</code>.</p>
+
+<p>If the command succeeds, it means that one of libpng.a/.so is available in the
+compiler's default library search path, (or in some <code>-L</code> directive the user
+added to his <code>LDFLAGS</code>) and that it contains the function
+<code>png_set_compression_buffer_size</code>.
+The latter is established by using a main()
+function, which forces the linker to fail on missing symbols (also note the
+omission of <code>-c</code>).</p>
+
+<p>If your aim is only to test whether the libpng library is installed, the test
+can be written as:</p>
+
+<pre><code>#include &lt;png.h&gt;
+int main() {return 0;}
+</code></pre>
+
+<p>and compiled exactly as the previous. Note that this test actually checks that
+both the header exists AND the library, so by using this kind of test you don't
+actually need to test for header and library separately. Again, we merely
+compiled the testcase and didn't need to execute it.</p>
+
+<h4>Pkg-config and derivates</h4>
+
+<p>For simple libraries such as <code>zlib</code> you should always try first whether you can
+simply link to e.g. <code>-lz</code>.
+If that doesn't work, you can fall back to a tool called <code>pkg-config</code> or one of
+its clones such as <code>pkgconf</code>, which is widely used.
+The path to the tool is user provided via the environment variable <code>PKG_CONFIG</code>.
+If not set, the fall-back is to use <code>pkg-config</code> instead.
+It can be used like this:</p>
+
+<pre><code>$PKG_CONFIG --cflags gtk+-2.0
+</code></pre>
+
+<p>This will print a couple of -I include directives that are required to find the
+headers of gtk+2.</p>
+
+<p>Likewise</p>
+
+<pre><code>$PKG_CONFIG --libs gtk+-2.0
+</code></pre>
+
+<p>can be used to query the LDFLAGS required for linking gtk+2.
+Note that by default, pkg-config looks into <code>$(prefix)/lib/pkgconfig</code>, which
+is not compatible with crosscompilation.</p>
+
+<h5>2 solutions exist to make pkg-config compatible with cross-compilation:</h5>
+
+<ul>
+<li><p>the environment variable <code>PKG_CONFIG_SYSROOT_DIR</code> can be set to the
+crosscompile rootfs root directory, e.g. <code>/tmp/piroot</code> and
+<code>PKG_CONFIG_LIBDIR</code> to <code>/tmp/piroot/lib/pkgconfig</code>, or</p></li>
+<li><p>if <code>PKG_CONFIG</code> is not set, but a cross-compile triplet was passed to
+the configuration process, and a triplet-prefixed pkg-config exists in the
+<code>PATH</code>, this is being used instead of the host's <code>pkg-config</code>, e.g.
+<code>armv7l-linux-musl-pkg-config</code>.</p></li>
+</ul>
+
+<h5>Now comes the bummer:</h5>
+
+<p>The authors of some packages wrote their own package specific pkg-config
+replacement, reasoning unknown. For example, on my machine the following
+proprietary -config programs exist: <code>allegro-config</code>, <code>croco-config</code>,
+<code>curl-config</code>,<code>freetype-config</code>, <code>gpg-error-config</code>, <code>icu-config</code>,
+<code>libpng-config</code>, <code>pcap-config</code>, <code>pcre-config</code>, <code>python-config</code>,
+<code>sdl-config</code>, <code>xml2-config</code> ...</p>
+
+<p>What they all have in common is that they do things differently and they are not
+cross-compile compatible. Usually, whenever one of them is being used
+by a build system, cross-compilation breakage follows.
+Because these tools simply return the include and library directories of
+the host.</p>
+
+<p>Unfortunately, the authors of some of these programs refuse to write portable
+pkg-config files instead. OTOH, most of them require no special include dirs,
+and their <code>--libs</code> invocation simply returns <code>-lfoo</code>.
+For those few that don't (the worst offenders are apr-1-config tools from
+Apache Foundation), as a build system author, I suppose, the only correct way
+to deal with them is to not use them at all, but instead force the user to
+specify the include and library paths for these libraries with some
+configuration parameters.
+Example: <code>--apr-1-cflags=-I/include/apr-1</code></p>
+
+<h4>Checking for sizes of things</h4>
+
+<p>In some rare cases, one needs to know e.g. the size of long of the toolchain
+target at compile time.
+Since we cannot execute any testbinaries that would run e.g.</p>
+
+<pre><code>printf("%zu\n", sizeof(long));
+</code></pre>
+
+<p>and then parse their output because we need to stay compatible with
+cross-compilers, the proper way to do it is by using a "static assertion"
+trick like here:</p>
+
+<pre><code>/* gives compile error if sizeof(long) is not 8 */
+int arr[sizeof(long) == 8 ? 1 : -1];
+</code></pre>
+
+<p>Compile the testcase with <code>$CC $CPPFLAGS $CFLAGS -c temp.c</code>.</p>
+
+<p>Another way is to run e.g.</p>
+
+<pre><code>$CC $CPPFLAGS -dM -E - &lt;/dev/null | grep __SIZEOF_LONG__
+</code></pre>
+
+<p>This command (without the piped grep) makes GCC and derivates spit out a list
+of built-in macros.
+Only GCC and Clang based toolchains that came out during the last couple years
+support this though, so the static assert method should be prefered.</p>
+
+<h4>Checking for endianness</h4>
+
+<p>Unfortunately, varying platforms have provided endianness test macros in
+different headers.
+Because of that, many build system authors resorted to compiling and running
+a binary that does some bit tricks to determine the endianness and print a
+result.</p>
+
+<p>However since we cannot run a binary as we want to stay cross-compile compatible
+, we need to find another way to get the definition.
+I've actually spent a lot of effort by trying dozens of compiler versions and
+target architectures and came up with a <a href="https://github.com/rofl0r/endianness.h">public domain single-header solution</a>,
+that has portable fallback functions that can do endian conversions even if the
+detection failed, although at a slight runtime cost.</p>
+
+<p>I would advise its usage, rather than trying to hack together a custom thing.</p>
+
+<h4>Checking for bugs and similar things</h4>
+
+<p>I've also come across a number of checks that required to run a testcase and
+therefore prevented crosscompilation from working. Mostly, these are tests
+for a certain bug or odd behaviour.
+However, it is wrong to assume that because the system the test binary currently
+runs on has a certain bug, the end user's system will have the same bug.
+The binary might for example be distributed as a package, and might suddenly
+start misbehaving if another component that fixes the bug is updated.
+Therefore the only safe and correct way to deal with this situation is to write
+a check that's
+executed when the binary is used at runtime, and then sets a flag like <code>bug=1;</code>
+and then have two different codepaths, one for a system with the bug and one for
+a system without it.</p>
+
+<h4>cross-compile specific configuration</h4>
+
+<p>In GNU Autoconf, the way to tell it that you're cross-compiling is by setting a
+<code>--host=triplet</code> parameter with the triplet of the target toolchain, additional
+to putting the crosscompiler name into the <code>CC</code> environment variable.
+The triplet is then used to prefix all parts of the toolchain, like</p>
+
+<pre><code>RANLIB=$(triplet)-ranlib
+STRIP=$(triplet)-strip
+</code></pre>
+
+<p>etc.
+For the build host, there's also a parameter called <code>--build=triplet</code> .
+If not set, the configure process will try whether <code>gcc</code> or <code>cc</code> is available,
+and then use that. If set, all toolchain components targeting the host you're on
+will be prefixed with this triplet. It can be queried by running
+<code>gcc -dumpmachine</code>. Usually, it is not necessary to set it.</p>
+
+<h4>Configuring paths</h4>
+
+<p>Knowledge about system paths is required for 2 reasons. One is that during the
+Installation stage we need to know where files like the compiled program binary
+need to be installed in. The other is that our program or library might require
+some external data files. For example, the program might require a database
+at runtime.</p>
+
+<p>For this reason, a <code>--prefix</code> variable is passed to the configure step.
+On most typical linux installations <code>--prefix=/usr</code> would be used for a system
+install, whereas <code>--prefix=/usr/local</code> is typically used for an alternate
+installation from source of a package the distribution provides but for some
+reason is not sufficient for the user.
+Sabotage Linux and others use an empty prefix, i.e. <code>--prefix=</code>, which means
+that for example binaries go straight into <code>/bin</code> and not <code>/usr/bin</code>, etc.
+Many hand-written configure scripts get this wrong and treat --prefix= as if
+the user hadn't passed --prefix at all, and fall back to the default.
+The default, btw is traditionally <code>/usr/local</code>.</p>
+
+<p>So in case your program needs a database, let's say <code>leetpackage.sqlite</code>, you
+would probably hardcode the following db path into your binary:</p>
+
+<pre><code>#define DB_PATH PREFIX "/share/leetpackage/leetpackage.sqlite"
+</code></pre>
+
+<p>where PREFIX would be set as part of CPPFLAGS or similar according to the user's
+selection.
+For more fine-grained control, traditional configure scripts also add options
+like <code>--bindir</code>, <code>--libdir</code>, <code>--includedir</code>, <code>--mandir</code>, <code>--sysconfigdir</code>, etc
+additional to <code>--prefix</code>,
+which, if not set, default to <code>${prefix}/bin</code>, <code>${prefix}/lib</code>,
+<code>${prefix}/include</code> etc.</p>
+
+<p>More on paths in the Installation chapter.</p>
+
+<h3>Step 2: The build</h3>
+
+<p>After the configuration step finished, it should have written the configuration
+data in some form, either a header, or a Makefile include file, which is then
+included by the actual Makefile (or equivalent).
+This should include any previously mentioned environment variables, so it
+is possible to login in a different shell session without any of them set, yet
+getting the same result when running <code>make</code>.
+Some users of GNU autotools create the Makefile from a template (usually called
+<code>Makefile.in</code>) at the end of the configure run, but I personally found this to
+be really impractical, because when making changes to the Makefile template,
+configure has to be re-run every single time.
+Therefore I recommend writing the settings into a file called
+<code>config.mak</code>, which is included by the Makefile.</p>
+
+<p>The actual compilation is typically run by executing <code>make</code>, which on most
+systems defaults to GNU make, which is a lot more powerful than the traditional
+BSD makes. Its code is small and written in portable C, so it's easy to get it
+bootstrapped quickly on systems that don't have it yet, unlike competitors such
+as CMake, which is 1) written in C++ which takes a lot longer to parse than C,
+and 2) consists of > 1 million lines of code and 3) occupies a considerable
+amount of HDD space once installed.
+Anyway, GNU make can even be found pre-installed on the BSDs, it's called
+<code>gmake</code> there.</p>
+
+<p>Here, the following conventions apply:</p>
+
+<ul>
+<li>In order to enable a verbose build showing the full compiler command line
+rather than just <code>CC foo.c</code> for debugging purposes, a flag <code>V=1</code>, short for
+verbose, can be passed as in <code>make V=1</code>.</li>
+<li>To use a parallel build, for example to compile one C or C++ file per
+available CPU core, the <code>-jN</code> flag is used, such as in <code>make -j8</code> if you want
+to use 8 parallel processes.</li>
+</ul>
+
+<p>If a Makefile is used for building, the build process should be tested using
+several parallel processes, because failure to document dependencies of files
+properly often results in broken parallel builds, even though they seem to work
+perfectly with <code>-j1</code>.</p>
+
+<p>Do note that you should not <code>strip</code> binaries, ever. If the user wants his
+binaries stripped, he will pass <code>-s</code> as part of his <code>LDFLAGS</code>.</p>
+
+<h3>Step 3: Installation</h3>
+
+<p>The Installation is typically done using the <code>make install</code> command.
+Additionally there's an important variable that distro maintainers use for
+packaging: <code>DESTDIR</code>.</p>
+
+<p>If for example, at configure time, <code>--prefix=/usr</code> was set, then
+<code>make install DESTDIR=/tmp/foo</code> should cause stuff to be installed into
+<code>/tmp/foo/usr</code>, so if your package compiles a binary called <code>myprog</code>, it should
+end up in <code>/tmp/foo/usr/bin/myprog</code>. A typical install rule would look like
+this:</p>
+
+<pre><code>bindir ?= $(prefix)/bin
+
+...
+
+install: myprog
+    install -Dm 755 myprog $(DESTDIR)$(bindir)/myprog
+</code></pre>
+
+<p>here we use the <code>install</code> program to install the binary <code>myprog</code> to its
+destination with mode 755 (<code>-m 755</code>) and create all path compontens along
+the way (<code>-D</code>).
+Unfortunately, the <code>install</code> program shipped with some BSDs and Mac OS X
+refuse to implement these practical options, therefore this
+<a href="https://github.com/rofl0r/install.sh">portable replacement implementation</a> can
+be used instead.</p>
+
+<p>It is a good idea and the common practice to explicitly set the permissions
+during the install step, because the user doing the installation might
+unwittingly have some restrictive umask set, which can lead to odd issues later
+on.</p>
+
+<p>Even if the build system you intend to write does not use Makefiles, you should
+respect the existing conventions (unlike CMake &amp; co which NIH'd everything)
+like <code>V=1</code>, <code>-j8</code>, <code>DESTDIR</code>, <code>--prefix</code>, etc.</p>
+
+<h2>Closing thoughts</h2>
+
+<p>One of the big advantages of GNU's autotools system is that, from a user's
+perspective, they require nothing more than a POSIX-compatible shell to execute
+configure scripts, and GNU make, which as already mentioned is really slim,
+written in portable C, and widely available while requiring less than one MB
+of HDD space (my GNU make 3.82 install takes 750KB total including docs).</p>
+
+<p>So in my opinion, the build system of the future, in whatever language it's
+written in, and how many millions of lines of code it consists of, should do
+precisely the same: it should at least have the option to generate a configure
+script and a <em>stand-alone</em> GNU Makefile, which is shipped in release tarballs.
+That way only the developers of the package need the build toolkit and its
+dependencies installed on their machine, while the user can use the tools he
+already has installed, and can interface with the build system in a way he's
+already familiar with.</p>
+</div>
+
+
+
+</body>
+</html>

@@ -5,6 +5,26 @@
 <link>https://sabotage-linux.github.io</link>
 <description>Random rants of a linux distribution developer</description>
 <language>en</language>
+<item><title>Mastering and designing C/C++ build systems</title>
+<guid>https://sabotage-linux.github.io/blog/5</guid>
+<pubDate>19 Apr 2019 10:36 UTC</pubDate>
+<description><![CDATA[
+<h2>A Primer for build system developers and users</h2>
+
+<p>As the maintainer of
+<a href="https://github.com/sabotage-linux/sabotage">sabotage linux</a>,
+a distro compiled from source, with >1000
+packages, and being involved in the development of
+<a href="https://musl-libc.org/">musl libc</a>, I've seen a wide
+variety of odd build systems, or regular build systems used in an odd way.
+Which resulted in lots of issues trying to get other people's packages building.</p>
+
+<p>The vast majority of build system coders and developers using these build systems
+for their packages do not understand in detail how their toolchains are supposed
+to be used,
+and especially cross-compilation is a topic the majority of people knows nothing
+...</p>
+]]></description></item>
 <item><title>benchmarking python bytecode vs interpreter speed and bazaar vs git</title>
 <guid>https://sabotage-linux.github.io/blog/4</guid>
 <pubDate>07 Apr 2019 00:39 UTC</pubDate>
