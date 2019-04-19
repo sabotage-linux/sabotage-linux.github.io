@@ -33,7 +33,7 @@ Configuration, Compilation, Installation.
 So in order to get your program compiled on a variety of different hosts, you
 typically need to interface with the following components:
 
-### the compiler.
+### The compiler.
 
 For the C programming language, the convention is that on the user's system
 there's a C compiler installed in the default search `PATH` with the name `cc`.
@@ -59,7 +59,7 @@ spaces inside the filename.
 (For the record, the compiler is the program that turns your sourcecode into
  an object file, e.g. `cc foo.c -c -o foo.o`)
 
-### the linker.
+### The linker.
 
 Fortunately with C and C++, unless you do highly unusual things, you will
 never have to invoke the linker directly. instead you can simply use `CC`
@@ -69,7 +69,7 @@ call the linker themselves.
 .o files and turns them into an executable or a shared library, e.g.:
 `cc foo.o bar.o -o mybinary.elf`)
 
-### compiler and linker options.
+### Compiler and linker options.
 
 There will be a couple options you will have to use so the compilation works
 in a certain way. For example, your code may require the flag `-std=c99` if
@@ -107,7 +107,7 @@ command.
 From here on, whenever we talk about `cc` or `CC` or `CFLAGS`, the exact same
 applies to `c++`, `CXX` and `CXXFLAGS` for C++.
 
-### libraries and their headers
+### Libraries and their headers
 
 When writing code in C or C++, you necessarily need to use libraries installed
 on the end users machine. At least, you would need to use the C or C++
@@ -124,7 +124,7 @@ is none of your concern. It's the job of the user to configure his compiler
 in such a way that when you e.g. `#include <stdio.h>` it works (usually the user
 uses his distro-provided toolchain which is properly set up).
 
-### cross-compilation
+### Cross-compilation
 
 Cross-compilation means that you compile for a different platform than
 the one you're using, for example if you want to compile `ARM` binaries for your
@@ -447,7 +447,7 @@ executed when the binary is used at runtime, and then sets a flag like `bug=1;`
 and then have two different codepaths, one for a system with the bug and one for
 a system without it.
 
-#### cross-compile specific configuration
+#### Cross-compile specific configuration
 
 In GNU Autoconf, the way to tell it that you're cross-compiling is by setting a
 `--host=triplet` parameter with the triplet of the target toolchain, additional

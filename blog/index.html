@@ -50,7 +50,7 @@ Configuration, Compilation, Installation.</p>
 <p>So in order to get your program compiled on a variety of different hosts, you
 typically need to interface with the following components:</p>
 
-<h3>the compiler.</h3>
+<h3>The compiler.</h3>
 
 <p>For the C programming language, the convention is that on the user's system
 there's a C compiler installed in the default search <code>PATH</code> with the name <code>cc</code>.
@@ -77,7 +77,7 @@ spaces inside the filename.</p>
 <p>(For the record, the compiler is the program that turns your sourcecode into
  an object file, e.g. <code>cc foo.c -c -o foo.o</code>)</p>
 
-<h3>the linker.</h3>
+<h3>The linker.</h3>
 
 <p>Fortunately with C and C++, unless you do highly unusual things, you will
 never have to invoke the linker directly. instead you can simply use <code>CC</code>
@@ -87,7 +87,7 @@ call the linker themselves.
 .o files and turns them into an executable or a shared library, e.g.:
 <code>cc foo.o bar.o -o mybinary.elf</code>)</p>
 
-<h3>compiler and linker options.</h3>
+<h3>Compiler and linker options.</h3>
 
 <p>There will be a couple options you will have to use so the compilation works
 in a certain way. For example, your code may require the flag <code>-std=c99</code> if
@@ -126,7 +126,7 @@ command.</p>
 <p>From here on, whenever we talk about <code>cc</code> or <code>CC</code> or <code>CFLAGS</code>, the exact same
 applies to <code>c++</code>, <code>CXX</code> and <code>CXXFLAGS</code> for C++.</p>
 
-<h3>libraries and their headers</h3>
+<h3>Libraries and their headers</h3>
 
 <p>When writing code in C or C++, you necessarily need to use libraries installed
 on the end users machine. At least, you would need to use the C or C++
@@ -143,7 +143,7 @@ is none of your concern. It's the job of the user to configure his compiler
 in such a way that when you e.g. <code>#include &lt;stdio.h&gt;</code> it works (usually the user
 uses his distro-provided toolchain which is properly set up).</p>
 
-<h3>cross-compilation</h3>
+<h3>Cross-compilation</h3>
 
 <p>Cross-compilation means that you compile for a different platform than
 the one you're using, for example if you want to compile <code>ARM</code> binaries for your
@@ -477,7 +477,7 @@ executed when the binary is used at runtime, and then sets a flag like <code>bug
 and then have two different codepaths, one for a system with the bug and one for
 a system without it.</p>
 
-<h4>cross-compile specific configuration</h4>
+<h4>Cross-compile specific configuration</h4>
 
 <p>In GNU Autoconf, the way to tell it that you're cross-compiling is by setting a
 <code>--host=triplet</code> parameter with the triplet of the target toolchain, additional
