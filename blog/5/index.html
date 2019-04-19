@@ -492,7 +492,22 @@ For the build host, there's also a parameter called <code>--build=triplet</code>
 If not set, the configure process will try whether <code>gcc</code> or <code>cc</code> is available,
 and then use that. If set, all toolchain components targeting the host you're on
 will be prefixed with this triplet. It can be queried by running
-<code>gcc -dumpmachine</code>. Usually, it is not necessary to set it.</p>
+<code>$CC -dumpmachine</code>. Usually, it is not necessary to set it.</p>
+
+<h4>Checking for the target OS</h4>
+
+<p>As mentioned it's hugely preferable to test for functionality rather
+than platform.
+But if you <em>really</em> think it's necessary to figure out the target OS,
+do not use <code>uname</code> which is totally bogus. It simply returns the OS of
+the compiler user, who might use an Apple computer but cross-compile for
+NetBSD.</p>
+
+<p>You can instead derive the target OS via <code>$CC -dumpmachine</code>, which returns the
+toolchain target triplet, or by parsing the output of</p>
+
+<pre><code>$CC $CPPFLAGS -dM -E - &lt;/dev/null
+</code></pre>
 
 <h4>Configuring paths</h4>
 
@@ -626,6 +641,10 @@ That way only the developers of the package need the build toolkit and its
 dependencies installed on their machine, while the user can use the tools he
 already has installed, and can interface with the build system in a way he's
 already familiar with.</p>
+
+<h5>Update</h5>
+
+<p>19 Apr 2019 19:34 UTC - Added paragraph "Checking for the target OS"</p>
 </div>
 
 
