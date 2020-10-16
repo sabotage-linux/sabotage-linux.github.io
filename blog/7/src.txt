@@ -1,0 +1,171 @@
+### Speeding up static regexes in C using re2r and ragel
+## 16 Oct 2020 00:16 UTC
+
+While working on [tinyproxy](https://github.com/tinyproxy/tinyproxy) I noticed
+that its config file parser got notoriously slow when processing big config
+files with several thousand lines (for example Allow/Deny directives).
+
+The config parser uses a set of static [POSIX ERE](https://pubs.opengroup.org/onlinepubs/9699919799/basedefs/V1_chap09.html) regexes which are compiled
+once using [regcomp(3p)](https://www.man7.org/linux/man-pages/man3/regcomp.3p.html)
+and then executed on every single line via regexec(3p).
+
+For example, the regex for the "Allow" directive is
+
+    (((([0-9]+[.][0-9]+[.][0-9]+[.][0-9]+)(/[0-9]+)?)|(((([0-9a-fA-F:]{2,39}))|(([0-9a-fA-F:]{0,29}:([0-9]+[.][0-9]+[.][0-9]+[.][0-9]+))))(/[0-9]+)?))|([-A-Za-z0-9._]+))
+
+which consists of the more readable parts
+
+    "(" "(" IPMASK "|" IPV6MASK ")" "|" ALNUM ")"
+
+as defined using some CPP macros in the source code.
+
+So basically the regex matches either an ipv4 address with a netmask
+like 10.0.0.0/8, an ipv6 with a netmask, or an alphanumeric domain name.
+
+Parsing 32K lines with `Allow` statements using the libc's regexec function took
+about 2.5 seconds, which made me wonder whether we could get this a little bit
+faster.
+
+POSIX regexec() has the following signature:
+
+    int regexec(const regex_t *restrict preg, const char *restrict string,
+        size_t nmatch, regmatch_t pmatch[restrict], int eflags);
+
+`preg` is the compiled regex, `string` the string to match, `nmatch` the maximum
+number of matching groups, and `pmatch` an array of end/start indices into the
+string, corresponding to matching groups.
+Matching groups are the parts enclosed inside parens in the regex.
+This is a very practical feature as it allows to easily extract submatches.
+
+My idea was to write a wrapper around [re2c](https://re2c.org/) or
+[ragel](http://www.colm.net/open-source/ragel/) (both of which compile a
+fast finite state automaton), which automatically turns a POSIX-compatible ERE
+expression into the expected format and generates a regexec()-like wrapper
+function that provides the same convenient submatch array.
+
+For evaluation, I first created a manual re2c conversion of (a predecessor of)
+the above "Allow" regex, however that resulted in almost 10K (!) lines of C
+code emitted.
+[Re2c input](https://gist.github.com/rofl0r/16702d4b509038fc6f3fe8acacdf4573)
+
+Next I tried the same thing with ragel, and to my pleasant surprise the
+resulting C code was only a little over 900 lines, i.e. 10% of re2c.
+[Ragel input](https://gist.github.com/rofl0r/05ac6936f1215eae6898fad98680b5c1)
+
+This made it quite clear that ragel was the winner of the competition.
+
+After spending some more effort, the product was named re2r (regex to ragel)
+and is [available here](https://github.com/rofl0r/re2r).
+
+re2r accepts input on stdin, a machine name followed by a space and a regex per
+line.
+For example (from tinyproxy):
+
+    logfile "([^"]+)"
+    pidfile "([^"]+)"
+    port ([0-9]+)
+    maxclients ([0-9]+)
+
+which generates the following code:
+
+<script src="https://gist.github.com/rofl0r/ad56f0a43244f142897aea8a5e13c18b.js"></script>
+
+re2r helpfully prints the message:
+
+     diagnostics: maximum number of match groups: 2
+
+more about that in a minute.
+
+As a size optimization, for multiple identical regexes, the wrapper for that
+machine simply calls the wrapper for the machine with the identical regex, e.g.
+`re2r_match_pidfile()` calls `re2r_match_logfile()`.
+
+The prototype for our regexec()-like match functions looks like:
+
+    RE2R_EXPORT int re2r_match_logfile(const char *p, const char* pe, size_t nmatch, regmatch_t matches[]);
+
+*RE2R_EXPORT* needs to be defined by the user to either "static" or "extern",
+depending on how he needs the visibility of the function.
+*re2r_match_logfile* is the function name generated for the named regex
+"logfile".
+
+`p` is a pointer to the start of the string to be matched, and `pe` to the end
+(usually it can be defined as as `p+strlen(p)`).
+`nmatches` is just like in the POSIX regexec() signature the maximum number of
+items that can be stored in the `matches` array, which is optimally of the size
+that our diagnostic line earlier notified us about (here: 2).
+The `matches` array is of type `regmatch_t[]` (thus we need to include the header
+`regex.h` to get the definition) and it must consist of `nmatches` items.
+
+Now we only need to run ragel on the re2r output to get a heavily optimized
+matcher function that returns almost identical results to using the same regex/
+string with POSIX `regcomp()`/`regexec()`, while having an almost identical function
+signature, so it's straightforward to replace existing code.
+
+As a trick, the plain output of re2r can be directly compiled using
+`gcc -include regex.h -DRE2R_EXPORT=extern -c foo.c` after running ragel on it,
+without having to embed/include it in other source files.
+
+In the case of tinyproxy, parsing the 32K allow statements using the re2r/ragel
+reduced the runtime from 2.5 seconds to a mere 236 milliseconds.
+
+re2r also ships a testing tool called `re2r_test` which can be used as follows:
+
+    re2r_test -r "((foo)|bar(baz))"
+
+which then waits for test input on stdin.
+upon entering "foo", we get the following output:
+
+    ---------- RE2R  ----------
+    0: foo
+    1: foo
+    2: foo
+    ((foo)|bar(baz))
+    12   2    3   31
+    12   2         1
+    ---------- POSIX ----------
+    0: foo
+    1: foo
+    2: foo
+    ((foo)|bar(baz))
+    12   2    3   31
+    12   2         1
+
+The first block is the output from the re2r matcher function, the other from
+POSIX regexec().
+The 0, 1, 2 positions show the extracted match groups, then the regex is
+displayed followed by 2 lines that show
+
+1) the offsets of all possible matching groups, and
+2) the matching groups that actually matched.
+
+In this case only the matching group 1 (outer parens pair) and 2 (foo) matched.
+
+Note that POSIX always makes a matching group 0 available, which has start and
+end offsets of the entire string if it was successfully matched.
+
+If we now enter "barbaz", we get:
+
+    ---------- RE2R  ----------
+    0: barbaz
+    1: barbaz
+    3: baz
+    ((foo)|bar(baz))
+    12   2    3   31
+    1         3   31
+    ---------- POSIX ----------
+    0: barbaz
+    1: barbaz
+    3: baz
+    ((foo)|bar(baz))
+    12   2    3   31
+    1         3   31
+
+In this case, we don't have a match for matching group 2, but one for 3.
+Group 1 matches again, as it surrounds the entire expression.
+
+Note that while re2r itself is GPL licensed, the code it emits is public domain.
+
+I hope that re2r will be helpful in the adoption of fast ragel parsers into C
+projects, and believe that re2r_test can be a generally useful tool to visualize
+regexes and matching groups on the terminal.

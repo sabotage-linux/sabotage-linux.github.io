@@ -5,6 +5,29 @@
 <link>https://sabotage-linux.github.io</link>
 <description>Random rants of a linux distribution developer</description>
 <language>en</language>
+<item><title>Speeding up static regexes in C using re2r and ragel</title>
+<guid>https://sabotage-linux.github.io/blog/7</guid>
+<pubDate>16 Oct 2020 00:16 UTC</pubDate>
+<description><![CDATA[
+<p>While working on <a href="https://github.com/tinyproxy/tinyproxy">tinyproxy</a> I noticed
+that its config file parser got notoriously slow when processing big config
+files with several thousand lines (for example Allow/Deny directives).</p>
+
+<p>The config parser uses a set of static POSIX ERE regexes which are compiled
+once using regcomp(3p) and then executed on every single line via regexec(3p).</p>
+
+<p>For example, the regex for the "Allow" directive is</p>
+
+<pre><code>(((([0-9]+[.][0-9]+[.][0-9]+[.][0-9]+)(/[0-9]+)?)|(((([0-9a-fA-F:]{2,39}))|(([0-9a-fA-F:]{0,29}:([0-9]+[.][0-9]+[.][0-9]+[.][0-9]+))))(/[0-9]+)?))|([-A-Za-z0-9._]+))
+</code></pre>
+
+<p>which consists of the more readable parts</p>
+
+<pre><code>"(" "(" IPMASK "|" IPV6MASK ")" "|" ALNUM ")"
+</code></pre>
+
+<p>...</p>
+]]></description></item>
 <item><title>Restoring accidentally deleted files on Linux</title>
 <guid>https://sabotage-linux.github.io/blog/6</guid>
 <pubDate>02 May 2019 22:27 UTC</pubDate>
