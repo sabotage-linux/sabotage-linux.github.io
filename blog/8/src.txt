@@ -1,7 +1,7 @@
 ### When "progress" is backwards
 ## 20 Oct 2020 15:58 UTC
 
-Lately i see many developments in the linux FOSS world that sell themselves as progress, but are actually hugely annoying and counter-productive.
+Lately I see many developments in the linux FOSS world that sell themselves as progress, but are actually hugely annoying and counter-productive.
 
 Counter-productive to a point where they actually cause major regressions, costs, and as in the case of GTK+3 ruin user experience and the possibility that we'll ever enjoy "The year of the Linux desktop".
 
@@ -54,7 +54,7 @@ The same critics apply to `iw` vs `iwconfig`.
 
 ## Showcase 4: ethernet adapter renaming by systemd/udev
 
-Lastest systemd-based distros come up with network interface names such as `enx78e7d1ea46da` or `vethb817d6a`, instead of the traditional `eth0`.
+Latest systemd-based distros come up with network interface names such as `enx78e7d1ea46da` or `vethb817d6a`, instead of the traditional `eth0`.
 The interface names assigned by default on Ubuntu 20 are so long a regular human can't even remember them, any configuration attempt requires one to copy/paste the name from `ip a` output.
 Yet almost every distro goes along with this [Poettering/freedesktop.org-dictated](https://www.freedesktop.org/wiki/Software/systemd/PredictableNetworkInterfaceNames/) nonsense.
 
@@ -76,7 +76,7 @@ Their porting effort involves almost every key component in the Linux desktop st
 ## Conclusion
 
 We live in an era where in the FOSS world one constantly has to relearn things, switch to new, supposedly "better", but more bloated solutions, and is generally left with the impression that someone is pulling the rug from below one's feet.
-Many of the key changes in this era have been rammed through by a small set of decision makers, often closely related to Red Hat/Gnome/freedesktop.org.
+Many of the key changes in this area have been rammed through by a small set of decision makers, often closely related to Red Hat/Gnome/freedesktop.org.
 We're buying this "progress" at a high cost, and one can't avoid asking oneself whether there's more to the story than meets the eye.
 Never forget, Red Hat and Microsoft (TM) are [partners](https://www.redhat.com/en/partners/microsoft) and might even have the same shareholders.
 
