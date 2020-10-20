@@ -5,6 +5,26 @@
 <link>https://sabotage-linux.github.io</link>
 <description>Random rants of a linux distribution developer</description>
 <language>en</language>
+<item><title>When "progress" is backwards</title>
+<guid>https://sabotage-linux.github.io/blog/8</guid>
+<pubDate>20 Oct 2020 15:58 UTC</pubDate>
+<description><![CDATA[
+<p>Lately i see many developments in the linux FOSS world that sell themselves as progress, but are actually hugely annoying and counter-productive.</p>
+
+<p>Counter-productive to a point where they actually cause major regressions, costs, and as in the case of GTK+3 ruin user experience and the possibility that we'll ever enjoy "The year of the Linux desktop".</p>
+
+<h2>Showcase 1: GTK+3</h2>
+
+<p>GTK+2 used to be <em>the</em> GUI toolkit for Linux desktop applications.
+It is highly customizable, reasonably lightweight and programmable from C, which means almost any scripting language can interface to it too.</p>
+
+<p>Rather than improving the existing toolkit code in a backwards-compatible manner, <a href="https://www.freedesktop.org">its developers</a> decided to introduce many breaking API changes which require a major porting effort to make an existing codebase compatible with the successor GTK+3, and keeping support for GTK+2 while supporting GTK+3 at the same time typically involves a lot of #ifdef clutter in the source base which not many developers are willing to maintain.</p>
+
+<p>Additionally GTK+3 made away with a lot of user-customizable themeing options, effectively rendering useless most of the existing themes that took considerable developer effort for their creation.
+Here's a <a href="https://ubuntu-mate.community/t/gtk3-regressions-from-a-gtk2-perspective/19511">list of issues</a> users are complaining about.</p>
+
+<p>...</p>
+]]></description></item>
 <item><title>Speeding up static regexes in C using re2r and ragel</title>
 <guid>https://sabotage-linux.github.io/blog/7</guid>
 <pubDate>16 Oct 2020 00:16 UTC</pubDate>
@@ -13,8 +33,9 @@
 that its config file parser got notoriously slow when processing big config
 files with several thousand lines (for example Allow/Deny directives).</p>
 
-<p>The config parser uses a set of static POSIX ERE regexes which are compiled
-once using regcomp(3p) and then executed on every single line via regexec(3p).</p>
+<p>The config parser uses a set of static <a href="https://pubs.opengroup.org/onlinepubs/9699919799/basedefs/V1_chap09.html">POSIX ERE</a> regexes which are compiled
+once using <a href="https://www.man7.org/linux/man-pages/man3/regcomp.3p.html">regcomp(3p)</a>
+and then executed on every single line via regexec(3p).</p>
 
 <p>For example, the regex for the "Allow" directive is</p>
 
@@ -22,9 +43,6 @@ once using regcomp(3p) and then executed on every single line via regexec(3p).</
 </code></pre>
 
 <p>which consists of the more readable parts</p>
-
-<pre><code>"(" "(" IPMASK "|" IPV6MASK ")" "|" ALNUM ")"
-</code></pre>
 
 <p>...</p>
 ]]></description></item>
