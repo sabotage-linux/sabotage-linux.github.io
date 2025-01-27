@@ -38,7 +38,7 @@ build of python, so they would become part of the package directory in
 /opt/python, but instead they were created on first access directly in
 /lib/python2.7, resulting in the following layout:</p>
 
-<pre><code>~ $ la /lib/python2.7/ | grep sysconfigdata
+<pre><code>$ la /lib/python2.7/ | grep sysconfigdata
 lrwxrwxrwx    1 root     root            48 Mar  4 03:11 _sysconfigdata.py -&gt; ../../opt/python/lib/python2.7/_sysconfigdata.py
 -rw-r--r--    1 root     root         19250 Mar  4 03:20 _sysconfigdata.pyc
 -rw-r--r--    1 root     root         19214 Jun 30  2018 _sysconfigdata.pyo
