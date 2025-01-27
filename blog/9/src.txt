@@ -1,0 +1,20 @@
+### Blog moved
+## 27 Jan 2025 12:31 UTC
+
+This blog has moved, already since about 4 years, to [neocities](https://sabotage-linux.neocities.org/blog/).
+I thought it would suffice to just change the top level links to the blog site,
+but i still see the majority of hits from the old URL, so i figure it makes
+sense to spell it out explicitly on the old blog itself.
+
+So folks, update your bookmarks to the new URL!
+
+[https://sabotage-linux.neocities.org/blog/](https://sabotage-linux.neocities.org/blog/).
+
+The new URL already has 4 more posts i wrote during the past years.
+In case you wonder about the why, it has to do with the acquisition of github
+by a big corporate entity, and my concerns about how that might affect my
+freedom of speech.
+
+See you on the new home!
+
+
